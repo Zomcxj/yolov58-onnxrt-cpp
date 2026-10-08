@@ -23,10 +23,10 @@ bool YolovOnnx::ReadLines(const std::string& label_file)
 	}
 
     if (_className.size() != class_num) {
-        printf("label_num do not match class_num !\n");
+        std::cout << "label_num do not match class_num !" << std::endl;
         return false;
     } else {
-        printf("load %s success !\n", label_file.c_str());
+        std::cout << "load " << label_file << " success !" << std::endl;
         return true;
     }
 }
