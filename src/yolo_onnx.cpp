@@ -323,18 +323,23 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 		                                _inputNodeNames.size(), _outputNodeNames.data(), _outputNodeNames.size());
 
 	// post-process
+	// 推理期状态全部使用局部变量（不写共享成员），保证 OnnxDetect 可被多线程并发调用
 	float* data = output_tensors[0].GetTensorMutableData<float>();
-	_outputTensorShape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();    
-	int64_t one_output_length = VectorProduct(_outputTensorShape) / _outputTensorShape[0];    // _outputTensorShape[0] = _batchSize
+	std::vector<int64_t> outputTensorShape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
+	std::vector<int64_t> outputMaskTensorShape;
+	std::vector<int> maskProtosShape;
+	int64_t maskProtosLength = 0;
+	int class_num = this->class_num;   // 局部副本
+	int64_t one_output_length = VectorProduct(outputTensorShape) / outputTensorShape[0];    // outputTensorShape[0] = _batchSize
 
     // cls
     if (task == "cls") {
-        if (_outputTensorShape.size() < 2) {
+        if (outputTensorShape.size() < 2) {
             std::cerr << "Classification model must have at least 2D output shape (batch_size, num_classes)" << std::endl;
             return false;
         }
 
-        int batchSize = _outputTensorShape[0];
+        int batchSize = outputTensorShape[0];
         // int classCount = _outputTensorShape[1]; // class_num
         if (batchSize != srcImgs.size()) {
             std::cerr << "Batch size mismatch between input images (" << srcImgs.size()
@@ -375,8 +380,8 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
     }
     
     // v5
-	int rows = _outputTensorShape[1];
-    int dimensions = _outputTensorShape[2];
+	int rows = outputTensorShape[1];
+    int dimensions = outputTensorShape[2];
 	cv::Mat output0 = cv::Mat(cv::Size(rows, dimensions), CV_32F, data);
     
     if (this->task == "det")
@@ -388,10 +393,10 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 	}
     else if (this->task == "seg") 
     {
-        _outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
-        mask_protos_shape = {1, (int)_outputMaskTensorShape[1], (int)_outputMaskTensorShape[2], (int)_outputMaskTensorShape[3]};
-        mask_protos_length = VectorProduct(mask_protos_shape); 
-        class_num = dimensions - 5 - (int)_outputMaskTensorShape[1];
+        outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+        maskProtosShape = {1, (int)outputMaskTensorShape[1], (int)outputMaskTensorShape[2], (int)outputMaskTensorShape[3]};
+        maskProtosLength = VectorProduct(maskProtosShape); 
+        class_num = dimensions - 5 - (int)outputMaskTensorShape[1];
     }
 
 	data = (float *)output0.data;
@@ -401,8 +406,8 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
     if (rows < dimensions)
     {
         yolov8 = true;
-        rows = _outputTensorShape[2];
-        dimensions = _outputTensorShape[1];
+        rows = outputTensorShape[2];
+        dimensions = outputTensorShape[1];
 		output0.release();
         output0 = cv::Mat(cv::Size(rows, dimensions), CV_32F, data).t();  //[bs,84,8400]=>[bs,8400,84]
         // std::cout << output0.rows << " " << output0.cols << " " << output0.size() << std::endl;
@@ -416,10 +421,10 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 			class_num = dimensions - 5;  
         else if (this->task == "seg") 
         {
-            _outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
-            mask_protos_shape = {1, (int)_outputMaskTensorShape[1], (int)_outputMaskTensorShape[2], (int)_outputMaskTensorShape[3]};
-            mask_protos_length = VectorProduct(mask_protos_shape); 
-            class_num = dimensions - 4 - (int)_outputMaskTensorShape[1];
+            outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+            maskProtosShape = {1, (int)outputMaskTensorShape[1], (int)outputMaskTensorShape[2], (int)outputMaskTensorShape[3]};
+            maskProtosLength = VectorProduct(maskProtosShape); 
+            class_num = dimensions - 4 - (int)outputMaskTensorShape[1];
         }
     }
 	
@@ -594,7 +599,7 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
             mask_params.netHeight = _netHeight;
             mask_params.netWidth = _netWidth;
             mask_params.maskThreshold = _maskThreshold;
-            cv::Mat mask_protos = cv::Mat(mask_protos_shape, CV_32F, output_tensors[1].GetTensorMutableData<float>() + img_idx * mask_protos_length);
+            cv::Mat mask_protos = cv::Mat(maskProtosShape, CV_32F, output_tensors[1].GetTensorMutableData<float>() + img_idx * maskProtosLength);
             for (int i = 0; i < temp_mask_proposals.size(); ++i) {
                 GetMask(cv::Mat(temp_mask_proposals[i]).t(), mask_protos, temp_output[i], mask_params);
             }

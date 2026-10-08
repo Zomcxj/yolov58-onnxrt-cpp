@@ -1,5 +1,8 @@
 #include "obb.h"
 
+#include <atomic>
+#include <thread>
+
 static int sig(double d) {
     return (d > eps) - (d < -eps);
 }
@@ -135,15 +138,17 @@ static double iou_poly(std::vector<double> p, std::vector<double> q) {
 }
 
 // cut oriimg with overlap
-std::vector<std::vector<int>> imgSplit(cv::Mat resImg, int cropSize) {
+std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, int cropSize, int overlap) {
 
     std::vector<std::vector<int>> setxywh;
 
     int cols = resImg.cols;
     int rows = resImg.rows;
 
-    int overlap = std::max(int(cropSize / 100 * 20), 200);  // =0 no overlap
-    int cutSize = cropSize - overlap;
+    if (cropSize <= 0) cropSize = 1;
+    if (overlap < 0) overlap = 0;
+    if (overlap >= cropSize) overlap = cropSize - 1;   // 防止切块步长<=0
+    int cutSize = cropSize - overlap;                  // 相邻块起始间距 = 边长 - 重叠
 
     int numW = (cols + cutSize - 1) / cutSize;
     int numH = (rows + cutSize - 1) / cutSize;
@@ -163,10 +168,15 @@ std::vector<std::vector<int>> imgSplit(cv::Mat resImg, int cropSize) {
             setxywh.push_back(xywh);
         }
     }
-    
+
     return setxywh;
 }
 
+// 原接口：固定 20% 重叠（最少 200px），与历史行为完全一致
+std::vector<std::vector<int>> imgSplit(cv::Mat resImg, int cropSize) {
+    int overlap = std::max(int(cropSize / 100 * 20), 200);
+    return imgSplitWithOverlap(resImg, cropSize, overlap);
+}
 
 // del same idx
 static void delRepeat(std::vector<YolovOutput>& output, std::vector<int> idx) {
@@ -326,4 +336,66 @@ void hbboxFilter(std::vector<YolovOutput> result, std::vector<YolovOutput>& post
     for (int i = 0; i < result.size(); i++) {
         postResult.push_back(result[i]);
     }
+}
+
+// ----------------------------------------------------------------------------
+// 多线程裁剪推理：切块 -> 线程池并行 OnnxDetect -> 按块顺序合并去重
+// 语义与原串行流程完全一致（每块独立检测，再依次与已有结果做 IoU 去重）
+// ----------------------------------------------------------------------------
+std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
+                                               const cv::Mat& img,
+                                               const std::string& task,
+                                               int cropSize,
+                                               int overlap,
+                                               float conf,
+                                               int threads) {
+    std::vector<std::vector<int>> tiles;
+    if (overlap >= 0)
+        tiles = imgSplitWithOverlap(img, cropSize, overlap);
+    else
+        tiles = imgSplit(img, cropSize);   // 自动重叠（20%，最少 200px）
+    if (tiles.empty()) {
+        std::vector<YolovOutput> empty;
+        return empty;
+    }
+
+    // 每个工作线程通过原子下标取块，结果写入自己的固定槽位 perTile[i]，
+    // 槽位互不重叠 -> 无需加锁。OnnxDetect 内部推理期状态已是局部变量，
+    // ORT Session::Run 官方保证线程安全，可真正并发推理。
+    std::vector<std::vector<YolovOutput>> perTile(tiles.size());
+
+    int nThreads = threads;
+    if (nThreads <= 0) nThreads = (int)std::thread::hardware_concurrency();
+    if (nThreads <= 0) nThreads = 1;
+    if (nThreads > (int)tiles.size()) nThreads = (int)tiles.size();
+
+    std::atomic<size_t> nextTile(0);
+    std::vector<std::thread> pool;
+    pool.reserve(nThreads);
+    for (int t = 0; t < nThreads; ++t) {
+        pool.emplace_back([&]() {
+            for (;;) {
+                size_t i = nextTile.fetch_add(1);
+                if (i >= tiles.size()) break;
+                const std::vector<int>& rc = tiles[i];
+                cv::Rect roi(rc[0], rc[1], rc[2], rc[3]);
+                cv::Mat sub = img(roi).clone();   // 独立内存，避免线程间共享 Mat 引用计数
+                std::vector<YolovOutput> r;
+                if (yolo.OnnxDetect(sub, r) && !r.empty())
+                    perTile[i] = std::move(r);
+            }
+        });
+    }
+    for (size_t t = 0; t < pool.size(); ++t) pool[t].join();
+
+    // 按块顺序合并，与串行版本去重结果一致
+    std::vector<YolovOutput> merged;
+    for (size_t i = 0; i < tiles.size(); ++i) {
+        const std::vector<int>& rc = tiles[i];
+        if (task == "obb")
+            obboxFilter(perTile[i], merged, rc[0], rc[1], conf);
+        else
+            hbboxFilter(perTile[i], merged, rc[0], rc[1], conf);
+    }
+    return merged;
 }
