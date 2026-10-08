@@ -83,7 +83,7 @@ static double intersectArea2(Points a, Points b, Points c, Points d) {
     polygon_cut(p, n, d, o, pp);
     double res = fabs(area(p, n));
 
-    if(s1 * s2 == -1) {res =- res;}
+    if(s1 * s2 == -1) {res = -res;}
     return res;
 }
 
@@ -137,28 +137,33 @@ static double iou_poly(std::vector<double> p, std::vector<double> q) {
     return iou;
 }
 
-// cut oriimg with overlap
-std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, int cropSize, int overlap) {
+// cut oriimg with overlap（矩形块：cropSize = 宽×高）
+std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropSize, int overlap) {
 
     std::vector<std::vector<int>> setxywh;
 
     int cols = resImg.cols;
     int rows = resImg.rows;
 
-    if (cropSize <= 0) cropSize = 1;
+    int cropW = cropSize.width  > 0 ? cropSize.width  : 1;
+    int cropH = cropSize.height > 0 ? cropSize.height : 1;
     if (overlap < 0) overlap = 0;
-    if (overlap >= cropSize) overlap = cropSize - 1;   // 防止切块步长<=0
-    int cutSize = cropSize - overlap;                  // 相邻块起始间距 = 边长 - 重叠
+    if (overlap >= cropW) overlap = cropW - 1;   // 防止切块步长<=0
+    if (overlap >= cropH) overlap = cropH - 1;
+    int stepW = cropW - overlap;                 // 相邻块起始间距 = 块宽 - 重叠
+    int stepH = cropH - overlap;
 
-    int numW = (cols + cutSize - 1) / cutSize;
-    int numH = (rows + cutSize - 1) / cutSize;
+    // 考虑重叠的块数：最后一块只需从 (n-1)*step 开始且覆盖到图像末尾即可，
+    // 避免因尾部重叠多算块。overlap=0 时退化为 ceil(边长/块边长)，与原公式一致。
+    int numW = std::max(1, (int)std::ceil((cols - (double)overlap) / stepW));
+    int numH = std::max(1, (int)std::ceil((rows - (double)overlap) / stepH));
 
     for (int y = 0; y < numH; y++) {
         for (int x = 0; x < numW; x++) {
-            int lx = x * cutSize;
-            int ly = y * cutSize;
-            int w = std::min(lx + cropSize, cols) - lx;
-            int h = std::min(ly + cropSize, rows) - ly;
+            int lx = x * stepW;
+            int ly = y * stepH;
+            int w = std::min(lx + cropW, cols) - lx;
+            int h = std::min(ly + cropH, rows) - ly;
 
             std::vector<int> xywh;
             xywh.push_back(lx);
@@ -172,10 +177,10 @@ std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, int cropSize, 
     return setxywh;
 }
 
-// 原接口：固定 20% 重叠（最少 200px），与历史行为完全一致
+// 原接口：固定正方形切块、20% 重叠（最少 200px），与历史行为完全一致
 std::vector<std::vector<int>> imgSplit(cv::Mat resImg, int cropSize) {
     int overlap = std::max(int(cropSize / 100 * 20), 200);
-    return imgSplitWithOverlap(resImg, cropSize, overlap);
+    return imgSplitWithOverlap(resImg, cv::Size(cropSize, cropSize), overlap);
 }
 
 // del same idx
@@ -345,7 +350,7 @@ void hbboxFilter(std::vector<YolovOutput> result, std::vector<YolovOutput>& post
 std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
-                                               int cropSize,
+                                               cv::Size cropSize,
                                                int overlap,
                                                float conf,
                                                int threads) {
@@ -353,10 +358,20 @@ std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
     if (overlap >= 0)
         tiles = imgSplitWithOverlap(img, cropSize, overlap);
     else
-        tiles = imgSplit(img, cropSize);   // 自动重叠（20%，最少 200px）
+        tiles = imgSplit(img, cropSize.width);   // 自动重叠（20%，最少 200px）
     if (tiles.empty()) {
         std::vector<YolovOutput> empty;
         return empty;
+    }
+
+    // 首次调用打印切块布局，便于确认参数是否如预期
+    static bool _layoutLogged = false;
+    if (!_layoutLogged) {
+        _layoutLogged = true;
+        std::cout << "crop tiles: img " << img.cols << "x" << img.rows
+                  << " -> tile " << cropSize.width << "x" << cropSize.height
+                  << ", overlap " << overlap << " -> " << tiles.size() << " tiles"
+                  << std::endl;
     }
 
     // 每个工作线程通过原子下标取块，结果写入自己的固定槽位 perTile[i]，

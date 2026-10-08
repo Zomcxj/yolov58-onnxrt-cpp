@@ -11,18 +11,19 @@ const double eps = 1E-8;
 
 std::vector<std::vector<int>> imgSplit(cv::Mat resImg, int cropSize);
 
-// 带重叠(overlap)参数的切块：overlap 为相邻切块间的重叠像素（0 = 无重叠）。
-// 原 imgSplit 固定 20%（且最少 200px），即 imgSplitWithOverlap(resImg, cropSize, max(cropSize/100*20,200))。
-std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, int cropSize, int overlap);
+// 带重叠(overlap)参数的矩形切块：cropSize = cv::Size(宽, 高)，overlap 为相邻切块间的
+// 重叠像素（0 = 无重叠）。块数按 ceil((边长-overlap)/(块边长-overlap)) 计算，
+// 保证覆盖全图且不因重叠多算块。原 imgSplit 固定正方形 20% 重叠（最少 200px）。
+std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropSize, int overlap);
 
 // 多线程裁剪推理：切块 -> 线程池并行 OnnxDetect -> 跨块合并去重。
 // task: "det" 用 hbboxFilter，"obb" 用 obboxFilter（其余任务请走原图推理）。
-// overlap: >=0 指定重叠像素，<0 用自动(20%且最少200px)。threads<=0 时自动用 CPU 核数。
-// 返回合并后的检测结果（已映射回原图坐标）。
+// cropSize: cv::Size(宽,高) 切块尺寸；overlap: >=0 指定重叠像素，<0 用自动(20%且最少200px)。
+// threads<=0 时自动用 CPU 核数。返回合并后的检测结果（已映射回原图坐标）。
 std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
-                                               int cropSize,
+                                               cv::Size cropSize,
                                                int overlap,
                                                float conf,
                                                int threads);

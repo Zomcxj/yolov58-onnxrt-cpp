@@ -1,4 +1,7 @@
 build/
+compile_commands.json
 *.exe
 *.dll
 *.a
+test_*.log
+video_*.mp4

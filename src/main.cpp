@@ -54,7 +54,7 @@ struct Options {
     std::string input;       // argv[2]：图片/目录 / 视频文件 / RTSP 流
     std::string task;        // argv[3]：det|obb|pose|seg|cls
     bool   crop = false;     // 裁剪推理（仅 det/obb）
-    int    cropSize = 1280;  // 切块边长
+    cv::Size cropSize{1280, 1280}; // 切块尺寸（宽×高）
     int    cropOverlap = -1; // 切块重叠像素；-1 = 自动(20%且最少200px)，0 = 无重叠
     float  conf = 0.5f;      // 跨块合并置信度阈值
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
@@ -133,7 +133,8 @@ static void printInfo(const Options& opt, const char* mode) {
     std::cout << "model: " << opt.modelPath
               << " | task: " << opt.task
               << " | mode: " << mode
-              << " | crop: " << (opt.crop ? ("on(size=" + std::to_string(opt.cropSize) +
+              << " | crop: " << (opt.crop ? ("on(size=" + std::to_string(opt.cropSize.width) +
+                                             "x" + std::to_string(opt.cropSize.height) +
                                              (opt.cropOverlap >= 0 ? ",ov=" + std::to_string(opt.cropOverlap) : "") +
                                              ",threads=" + std::to_string(opt.threads) + ")")
                                           : "off")
@@ -248,7 +249,7 @@ static void printUsage(const char* prog) {
         "\n"
         "Options:\n"
         "  --crop             启用裁剪（切块）推理，仅 det/obb 生效\n"
-        "  --crop-size N      切块边长，默认 1280\n"
+        "  --crop-size WxH   切块尺寸，默认 1280；支持 800x640（宽x高）或 1280（正方形）\n"
         "  --crop-overlap N   切块重叠像素：默认自动(20%且最少200px)，0=无重叠，>0=指定\n"
         "  --threads N        裁剪并行线程数，默认 = CPU 核数\n"
         "  --conf F           跨块合并置信度阈值，默认 0.5\n"
@@ -274,7 +275,16 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
         };
         try {
             if      (a == "--crop")         opt.crop = true;
-            else if (a == "--crop-size")    opt.cropSize = std::stoi(need("--crop-size"));
+            else if (a == "--crop-size") {
+                // 支持 "1280"（正方形）或 "800x640"（宽x高）
+                std::string v = need("--crop-size");
+                size_t pos = v.find('x');
+                if (pos == std::string::npos) pos = v.find('X');
+                if (pos != std::string::npos)
+                    opt.cropSize = cv::Size(std::stoi(v.substr(0, pos)), std::stoi(v.substr(pos + 1)));
+                else
+                    opt.cropSize = cv::Size(std::stoi(v), std::stoi(v));
+            }
             else if (a == "--crop-overlap") opt.cropOverlap = std::stoi(need("--crop-overlap"));
             else if (a == "--threads")      opt.threads = std::stoi(need("--threads"));
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));
