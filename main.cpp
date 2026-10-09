@@ -17,7 +17,7 @@
 // 项目对接（本区之外的全部是本地测试代码）
 //
 //   YolovOnnx yolo;
-//   yolo.ReadModel(modelPath, task);        // 启动时一次（GPU: ReadModel(modelPath, task, true)）
+//   yolo.ReadModel(modelPath, task, false);  // 启动时一次（isCuda 显式传，GPU 传 true）
 //   OnnxDetectv2(yolo, img, task, result);  // 每张图，result 已映射回原图坐标
 //   yolo.DrawPred(img, result);             // 可选：画框
 //
@@ -370,7 +370,7 @@ int main(int argc, char** argv) {
     }
 
     YolovOnnx yolo;
-    if (!yolo.ReadModel(opt.modelPath, opt.task, opt.isCuda, opt.cudaID, true)) {
+    if (!yolo.ReadModel(opt.modelPath, opt.task, opt.isCuda, opt.cudaID)) {
         std::cout << "cannot load model: " << opt.modelPath << std::endl;
         return 1;
     }

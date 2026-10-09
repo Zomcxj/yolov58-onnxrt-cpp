@@ -120,7 +120,7 @@ public:
 	*   \param[in] cudaID:if isCuda==true,run Ort-GPU on cudaID.
 	*   \param[in] warmUp:if isCuda==true,warm up GPU-model.
 	*/
-	bool ReadModel(const std::string& modelPath, std::string task, bool isCuda = false, int cudaID = 0, bool warmUp = true);
+	bool ReadModel(const std::string& modelPath, std::string task, bool isCuda, int cudaID = 0, bool warmUp = true);
 	/** \brief  detect.
 	*   \param[in] srcImg:a 3-channels image.
 	*   \param[out] output:detection results of input image.
