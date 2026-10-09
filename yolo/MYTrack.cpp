@@ -96,10 +96,4 @@ void MYTrack::doTrack(const std::vector<Object>& res, std::vector<Object>& track
     //     rectangle(img, Rect(tlwh[0], tlwh[1], tlwh[2], tlwh[3]), s, 2, cv::LINE_AA);
         
     // }
-
-
-    // 各类别单独赋跟踪id
-    // per_class_track(track_res);
-
-    // drawTrackBox(img, track_res);
 }

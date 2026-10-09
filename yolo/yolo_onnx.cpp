@@ -97,10 +97,14 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
 		_OrtSessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 		// _OrtSession = new Ort::Session(_OrtEnv, modelPath.c_str(), _OrtSessionOptions);
 
-        // 直接分配session_，使用 wchar_t* 路径
+        // Windows 下 ORTCHAR_T 为 wchar_t，Linux 下为 char
+#ifdef _WIN32
         const wchar_t* w_model_path = char_to_wchar(modelPath.c_str());
         _OrtSession = new Ort::Session(_OrtEnv, w_model_path, _OrtSessionOptions);
         free_wchar(w_model_path);
+#else
+        _OrtSession = new Ort::Session(_OrtEnv, modelPath.c_str(), _OrtSessionOptions);
+#endif
 
 		Ort::AllocatorWithDefaultOptions allocator;
 		//init input
@@ -652,9 +656,10 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
             }
 
             std::string conf = cv::format("%.2f", result[i].confidence);
-            std::string label = _className[result[i].id] + ":" + conf;
-            if (result[i].track_id > 0)     // --track 时由 main 写入，标签后附跟踪 id
-                label += " id=" + std::to_string(result[i].track_id);
+            // 有跟踪 id 时只显示 id，否则显示类别+置信度
+            std::string label = (result[i].track_id > 0)
+                ? ("id:" + std::to_string(result[i].track_id))
+                : (_className[result[i].id] + ":" + conf);
 
             int baseLine;
             cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);

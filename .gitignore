@@ -10,3 +10,5 @@ output/orig/
 output/crop/
 diag/
 3rdparty/
+release/
+build-release/
