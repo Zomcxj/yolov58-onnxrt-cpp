@@ -6,24 +6,40 @@ project(${PROJECT_NAME})
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-#set(OpenCV_DIR /home/daway/cxj/opencv/compiled/opencv4.7.0/lib/cmake/opencv4)  #opencv root
 find_package(OpenCV REQUIRED)
 
 set(ONNXRUNTIME_DIR ${CMAKE_SOURCE_DIR}/../onnxruntime-win-x64-1.14.0)
 set(ONNX_LIB ${ONNXRUNTIME_DIR}/lib/onnxruntime.dll)
 include_directories(${ONNXRUNTIME_DIR}/include)
 
-include_directories(${CMAKE_SOURCE_DIR}/include)
-aux_source_directory(src DIR_SRCS)
-add_executable(${PROJECT_NAME} ${DIR_SRCS})
+# Eigen（ByteTrack 依赖，纯头文件）：可用 -DEIGEN3_DIR=<path> 覆盖
+set(EIGEN3_DIR "D:/VsPro/PTZ/rknn/v8_rknn/3rdparty/eigen3" CACHE PATH "Eigen3 头文件根目录")
+if(NOT EXISTS "${EIGEN3_DIR}/Eigen/Core")
+    foreach(_eigen_cand
+        "D:/software/Qt/vcpkg/packages/eigen3_x64-mingw-dynamic/include/eigen3"
+        "C:/vcpkg/installed/x64-windows/include/eigen3")
+        if(EXISTS "${_eigen_cand}/Eigen/Core")
+            set(EIGEN3_DIR "${_eigen_cand}")
+            break()
+        endif()
+    endforeach()
+endif()
+if(NOT EXISTS "${EIGEN3_DIR}/Eigen/Core")
+    message(FATAL_ERROR "Eigen3 not found, pass -DEIGEN3_DIR=<dir containing Eigen/Core>")
+endif()
+
+include_directories(${CMAKE_SOURCE_DIR}/yolo)
+include_directories(${CMAKE_SOURCE_DIR}/bytetrack)
+include_directories(${EIGEN3_DIR})
+
+aux_source_directory(yolo src1)
+aux_source_directory(bytetrack src2)
+
+add_executable(${PROJECT_NAME} ${src1} ${src2} ${CMAKE_SOURCE_DIR}/main.cpp)
 
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${ONNX_LIB} -lpthread)
 
-# ---------------------------------------------------------------------------
-# Windows 下把运行时 DLL 复制到 exe 旁（exe 目录在 DLL 搜索顺序中优先于 System32/PATH，
-# 避免加载到其他版本的同名 DLL 导致启动失败）：onnxruntime、MinGW 运行时、OpenCV、
-# OpenCV 视频后端(opencv_videoio_ffmpeg*.dll，IP 流/视频读取必需)
-# ---------------------------------------------------------------------------
+# 运行时 DLL 拷到 exe 旁（exe 目录优先于 System32/PATH，避免加载到其他版本）
 set(_RUNTIME_DLLS ${ONNX_LIB})
 
 get_filename_component(_MINGW_BIN ${CMAKE_CXX_COMPILER} DIRECTORY)

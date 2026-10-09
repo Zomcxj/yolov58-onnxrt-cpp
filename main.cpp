@@ -18,6 +18,8 @@
 //   yolov-onnxrt model.onnx ./imgs obb --crop --crop-size 1280 --threads 4
 //   # 本地视频文件推理（结果存带框视频）
 //   yolov-onnxrt model.onnx video.mp4 det
+//   # 检测 + 跟踪（ByteTrack，打印 track id 并画框）
+//   yolov-onnxrt model.onnx video.mp4 det --track
 //   # IP 视频流接入（RTSP，逐帧推理存帧图）
 //   yolov-onnxrt model.onnx rtsp://192.168.1.64:554/stream obb --crop
 //
@@ -27,6 +29,7 @@
 //   --crop-overlap N    相邻切块重叠像素：默认自动(20%且最少200px)，0=无重叠
 //   --threads N         裁剪并行线程数，默认 = CPU 核数
 //   --conf F            跨块合并置信度阈值，默认 0.5
+//   --track             检测后接 ByteTrack 跟踪：打印 track id 并画框（cls 任务忽略）
 //   --save-dir DIR      结果输出目录，默认 ../output/
 //   --no-save           不保存结果（只推理打印耗时；IP 流不存帧图、视频不存结果视频）
 //   --show              IP 流/视频模式弹窗预览（按 q/ESC 退出）
@@ -38,6 +41,7 @@
 // ============================================================================
 #include "obb.h"
 #include "yolo_onnx.h"
+#include "MYTrack.h"   // ByteTrack 封装（检测 -> 跟踪）
 
 #include <chrono>
 #include <cctype>
@@ -58,6 +62,7 @@ struct Options {
     int    cropOverlap = -1; // 切块重叠像素；-1 = 自动(20%且最少200px)，0 = 无重叠
     float  conf = 0.5f;      // 跨块合并置信度阈值
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
+    bool   track = false;    // --track：检测后接 ByteTrack 跟踪（cls 无框，已在 main 里关闭）
     std::string savePath = "../output/";
     bool   save = true;      // --no-save 关闭保存
     bool   show = false;     // 视频预览
@@ -116,6 +121,49 @@ static double elapsedMs(Clock::time_point t0) {
     return std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
 }
 
+static double nowSeconds() {
+    return std::chrono::duration<double>(Clock::now().time_since_epoch()).count();
+}
+
+// ----------------------------------------------------------------------------
+// ByteTrack 跟踪（--track）：检测框 -> 跟踪框
+// 直接按 MYTrack 的用法调用：resultStructTransfer -> doTrack
+// dt_s = 距上一次检测的间隔(秒)，用于把卡尔曼速度换算成像素/秒（未知时传 0）
+// ----------------------------------------------------------------------------
+static void runTrack(MYTrack& tracker, const std::vector<YolovOutput>& det,
+                     cv::Mat& img, std::vector<Object>& tracks, double dt_s) {
+    std::vector<Object> objs;
+    tracker.resultStructTransfer(det, objs);
+    tracker.setFrameSize(img.cols, img.rows);
+    tracks.clear();
+    tracker.doTrack(objs, tracks, dt_s);
+}
+
+// 画跟踪框与 track id（叠在检测框之上，id 用红色区分）
+static void drawTracks(cv::Mat& img, const std::vector<Object>& tracks) {
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        const Object& t = tracks[i];
+        cv::Rect r((int)t.rect.x, (int)t.rect.y, (int)t.rect.width, (int)t.rect.height);
+        cv::rectangle(img, r, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+        cv::putText(img, "id=" + std::to_string(t.track_id), cv::Point(r.x, r.y - 5),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+    }
+}
+
+// 打印跟踪结果（每条轨迹一行）
+static void printTracks(const std::vector<Object>& tracks) {
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        const Object& t = tracks[i];
+        std::cout << "    track id=" << t.track_id
+                  << " class=" << t.label
+                  << " conf=" << t.prob
+                  << " box=(" << (int)t.rect.x << "," << (int)t.rect.y << ","
+                  << (int)t.rect.width << "," << (int)t.rect.height << ")"
+                  << " track_time=" << t.track_time
+                  << " v=(" << (int)t.vx << "," << (int)t.vy << ")px/s" << std::endl;
+    }
+}
+
 // ----------------------------------------------------------------------------
 // 统一推理入口：原图推理 / 裁剪推理（多线程），按配置 if 判断
 // 结果 result 已映射回原图坐标
@@ -138,6 +186,7 @@ static void printInfo(const Options& opt, const char* mode) {
                                              (opt.cropOverlap >= 0 ? ",ov=" + std::to_string(opt.cropOverlap) : "") +
                                              ",threads=" + std::to_string(opt.threads) + ")")
                                           : "off")
+              << " | track: " << (opt.track ? "on" : "off")
               << std::endl;
 }
 
@@ -150,6 +199,9 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
     if (files.empty()) files.push_back(opt.input);   // glob 不匹配时按单文件处理
 
     std::string savePath = withTrailingSep(opt.savePath);
+    MYTrack tracker;                      // --track：跨图片保持轨迹
+    std::vector<Object> tracks;
+    double lastDetS = 0.0;
     int nFail = 0;
     for (size_t k = 0; k < files.size(); ++k) {
         const std::string& f = files[k];
@@ -161,12 +213,21 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         detectOne(yolo, img, opt, result);
         double ms = elapsedMs(t0);
 
+        if (opt.track) {                       // 检测 -> 跟踪
+            double nowS = nowSeconds();
+            runTrack(tracker, result, img, tracks, lastDetS > 0.0 ? nowS - lastDetS : 0.0);
+            lastDetS = nowS;
+        }
+
         if (opt.task != "cls") {              // cls 无框可画，与原行为一致
             yolo.DrawPred(img, result);
+            if (opt.track) drawTracks(img, tracks);
             if (opt.save) cv::imwrite(savePath + pathBasename(f), img);
         }
-        std::cout << pathBasename(f) << "  [" << result.size() << " objs]  "
-                  << (int)(ms + 0.5) << " ms" << std::endl;
+        std::cout << pathBasename(f) << "  [" << result.size() << " objs";
+        if (opt.track) std::cout << ", " << tracks.size() << " tracks";
+        std::cout << "]  " << (int)(ms + 0.5) << " ms" << std::endl;
+        if (opt.track) printTracks(tracks);
     }
     std::cout << "done. " << files.size() << " image(s), " << nFail << " failed." << std::endl;
     return (nFail > 0 && nFail == (int)files.size()) ? 1 : 0;
@@ -208,13 +269,25 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt, InputType type) {
     cv::Mat frame;
     long long frameIdx = 0;
     double totalMs = 0;
+    MYTrack tracker;                      // --track：跨帧保持轨迹
+    std::vector<Object> tracks;
+    double lastDetS = 0.0;
     while (cap.read(frame)) {
         Clock::time_point t0 = Clock::now();
         std::vector<YolovOutput> result;
         detectOne(yolo, frame, opt, result);
         double ms = elapsedMs(t0);
 
-        if (opt.task != "cls") yolo.DrawPred(frame, result);
+        if (opt.track) {                       // 检测 -> 跟踪
+            double nowS = nowSeconds();
+            runTrack(tracker, result, frame, tracks, lastDetS > 0.0 ? nowS - lastDetS : 0.0);
+            lastDetS = nowS;
+        }
+
+        if (opt.task != "cls") {
+            yolo.DrawPred(frame, result);
+            if (opt.track) drawTracks(frame, tracks);
+        }
 
         if (saveImage) cv::imwrite(savePath + "stream_" + std::to_string(frameIdx) + ".jpg", frame);
         if (saveVideo) writer.write(frame);
@@ -225,8 +298,10 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt, InputType type) {
         }
         totalMs += ms;
         ++frameIdx;
-        std::cout << "frame " << frameIdx << "  [" << result.size() << " objs]  "
-                  << (int)(ms + 0.5) << " ms" << std::endl;
+        std::cout << "frame " << frameIdx << "  [" << result.size() << " objs";
+        if (opt.track) std::cout << ", " << tracks.size() << " tracks";
+        std::cout << "]  " << (int)(ms + 0.5) << " ms" << std::endl;
+        if (opt.track) printTracks(tracks);
     }
     std::cout << "done. " << frameIdx << " frame(s), avg "
               << (frameIdx ? (int)(totalMs / frameIdx + 0.5) : 0) << " ms/frame";
@@ -253,6 +328,7 @@ static void printUsage(const char* prog) {
         "  --crop-overlap N   切块重叠像素：默认自动(20%且最少200px)，0=无重叠，>0=指定\n"
         "  --threads N        裁剪并行线程数，默认 = CPU 核数\n"
         "  --conf F           跨块合并置信度阈值，默认 0.5\n"
+        "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
         "  --save-dir DIR     结果输出目录，默认 ../output/\n"
         "  --no-save          不保存结果（IP 流不存帧图、视频不存结果视频）\n"
         "  --show             IP 流/视频模式弹窗预览（按 q/ESC 退出）\n"
@@ -262,6 +338,7 @@ static void printUsage(const char* prog) {
         "Examples:\n"
         "  " << prog << " model.onnx ./imgs det --crop\n"
         "  " << prog << " model.onnx video.mp4 obb --show\n"
+        "  " << prog << " model.onnx video.mp4 det --track\n"
         "  " << prog << " model.onnx rtsp://192.168.1.64/stream det\n";
 }
 
@@ -288,6 +365,7 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
             else if (a == "--crop-overlap") opt.cropOverlap = std::stoi(need("--crop-overlap"));
             else if (a == "--threads")      opt.threads = std::stoi(need("--threads"));
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));
+            else if (a == "--track")        opt.track = true;
             else if (a == "--save-dir")     opt.savePath = need("--save-dir");
             else if (a == "--no-save")      opt.save = false;
             else if (a == "--show")         opt.show = true;
@@ -324,6 +402,10 @@ int main(int argc, char** argv) {
     }
     Options opt;
     if (!parseArgs(argc, argv, opt)) { printUsage(argv[0]); return 1; }
+    if (opt.track && opt.task == "cls") {   // cls 无检测框，跟踪无意义
+        std::cerr << "[warn] task 'cls' has no boxes, tracking disabled" << std::endl;
+        opt.track = false;
+    }
 
     YolovOnnx yolo;
     if (!yolo.ReadModel(opt.modelPath, opt.task, opt.isCuda, opt.cudaID, true)) {

@@ -4,4 +4,9 @@ compile_commands.json
 *.dll
 *.a
 test_*.log
+img_*.log
 video_*.mp4
+output/orig/
+output/crop/
+diag/
+3rdparty/
