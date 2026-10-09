@@ -25,7 +25,6 @@
 //   MYTrack tracker;
 //   std::vector<Object> objs, tracks;
 //   tracker.resultStructTransfer(result, objs);
-//   tracker.setFrameSize(img.cols, img.rows);
 //   tracker.doTrack(objs, tracks);
 // ============================================================================
 static void OnnxDetectv2(YolovOnnx& yolo, cv::Mat& img, const std::string& task,
@@ -184,7 +183,6 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         if (opt.track) {                       // 检测 -> 跟踪（直接用 MYTrack）
             std::vector<Object> objs;
             tracker.resultStructTransfer(result, objs);
-            tracker.setFrameSize(img.cols, img.rows);
             tracks.clear();
             tracker.doTrack(objs, tracks);
         }
@@ -245,7 +243,6 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
         if (opt.track) {                       // 检测 -> 跟踪（直接用 MYTrack）
             std::vector<Object> objs;
             tracker.resultStructTransfer(result, objs);
-            tracker.setFrameSize(frame.cols, frame.rows);
             tracks.clear();
             tracker.doTrack(objs, tracks);
         }
