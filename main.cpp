@@ -1,6 +1,6 @@
 // yolov-onnxrt：YOLO ONNX Runtime 推理工具（det/obb/pose/seg/cls）
 // 用法：yolov-onnxrt <model.onnx> <input> <task> [options]，详见 -h
-// <input> 按内容自动判断：rtsp/http 流 | 视频文件 | 图片/目录/glob
+// <input> 按内容自动判断：视频文件 | 图片/目录/glob
 // 类别名：模型旁 <模型名>.txt（每行一个，可选，缺省 class_0..N）
 #include "obb.h"
 #include "yolo_onnx.h"
@@ -32,7 +32,7 @@ struct Options {
 };
 
 // 输入类型自动判断
-enum class InputType { Image, VideoFile, IpStream };
+enum class InputType { Image, VideoFile };
 
 // ----------------------------------------------------------------------------
 // 工具函数
@@ -43,13 +43,7 @@ static std::string toLower(std::string s) {
     return s;
 }
 
-static bool startsWith(const std::string& s, const char* prefix) {
-    return s.compare(0, std::strlen(prefix), prefix) == 0;
-}
-
 static InputType detectInputType(const std::string& input) {
-    if (startsWith(input, "rtsp://") || startsWith(input, "http://") || startsWith(input, "https://"))
-        return InputType::IpStream;
     static const char* exts[] = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v"};
     std::string l = toLower(input);
     for (const char* e : exts) {
@@ -132,8 +126,8 @@ static void printTracks(const std::vector<Object>& tracks) {
 }
 
 // ----------------------------------------------------------------------------
-// 统一推理入口：原图推理 / 裁剪推理（多线程），按配置 if 判断
-// 结果 result 已映射回原图坐标
+// 项目对接接口：单图推理（cv::Mat 入，result 已映射回原图坐标）
+// 原图推理或裁剪推理（多线程）由 opt.crop 决定；画框/取结果都在调用侧完成
 // ----------------------------------------------------------------------------
 static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
                       std::vector<YolovOutput>& result) {
@@ -158,11 +152,15 @@ static void printInfo(const Options& opt, const char* mode) {
 }
 
 // ----------------------------------------------------------------------------
-// 模式一：图片写入推理（默认，旧版行为）
+// 测试：文件夹遍历推理（glob 图片/目录，逐张存结果图）
 // ----------------------------------------------------------------------------
 static int runImageMode(YolovOnnx& yolo, const Options& opt) {
     std::vector<std::string> files;
-    cv::glob(opt.input, files, false);
+    try {
+        cv::glob(opt.input, files, false);
+    } catch (const cv::Exception&) {   // 目录打不开等情况（如误传 URL）
+        files.clear();
+    }
     if (files.empty()) files.push_back(opt.input);   // glob 不匹配时按单文件处理
 
     std::string savePath = withTrailingSep(opt.savePath);
@@ -201,25 +199,20 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
 }
 
 // ----------------------------------------------------------------------------
-// 模式二/三：视频流（IP 流存帧图 / 本地视频文件存结果视频）
+// 测试：本地视频文件推理（存结果视频）
 // ----------------------------------------------------------------------------
-static int runVideoMode(YolovOnnx& yolo, const Options& opt, InputType type) {
+static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
     cv::VideoCapture cap;
-    if (type == InputType::IpStream) cap.open(opt.input);   // rtsp://...
-    else                            cap.open(opt.input);   // 本地视频文件
+    cap.open(opt.input);
     if (!cap.isOpened()) { std::cerr << "cannot open video: " << opt.input << std::endl; return 1; }
 
     std::string savePath = withTrailingSep(opt.savePath);
 
-    // 输出：IP 流 -> 存帧图；本地视频 -> 存结果视频
+    // 输出：存结果视频
     cv::VideoWriter writer;
     std::string videoOutPath;
-    bool saveImage = false;      // IP 流逐帧存图
-    bool saveVideo = false;      // 本地视频写结果文件
-    if (opt.save && type == InputType::IpStream) {
-        saveImage = true;
-        std::cout << "saving frames to " << savePath << "stream_*.jpg" << std::endl;
-    } else if (opt.save && type == InputType::VideoFile) {
+    bool saveVideo = false;
+    if (opt.save) {
         double fps = cap.get(cv::CAP_PROP_FPS);
         if (fps <= 1e-3 || fps != fps || fps > 240) fps = 25.0;
         cv::Size size((int)cap.get(cv::CAP_PROP_FRAME_WIDTH), (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT));
@@ -256,7 +249,6 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt, InputType type) {
             yolo.DrawPred(frame, result);
         }
 
-        if (saveImage) cv::imwrite(savePath + "stream_" + std::to_string(frameIdx) + ".jpg", frame);
         if (saveVideo) writer.write(frame);
         if (opt.show) {
             cv::imshow("yolov-onnxrt", frame);
@@ -284,9 +276,8 @@ static void printUsage(const char* prog) {
     std::cout <<
         "Usage: " << prog << " <model.onnx> <input> <task> [options]\n"
         "\n"
-        "  <input>  自动判断：rtsp:// 或 http(s):// -> IP 视频流(存帧图)\n"
-        "                        *.mp4/*.avi 等     -> 本地视频文件(存结果视频)\n"
-        "                        其余(图片/目录/glob)-> 图片写入推理(存结果图)\n"
+        "  <input>  自动判断：*.mp4/*.avi 等    -> 本地视频文件(存结果视频)\n"
+        "                    其余(图片/目录/glob) -> 文件夹遍历推理(存结果图)\n"
         "  <task>   det | obb | pose | seg | cls\n"
         "\n"
         "Options:\n"
@@ -298,8 +289,8 @@ static void printUsage(const char* prog) {
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
         "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
         "  --save-dir DIR     结果输出目录，默认 ../output/\n"
-        "  --no-save          不保存结果（IP 流不存帧图、视频不存结果视频）\n"
-        "  --show             IP 流/视频模式弹窗预览（按 q/ESC 退出）\n"
+        "  --no-save          不保存结果（只推理打印耗时）\n"
+        "  --show             视频模式弹窗预览（按 q/ESC 退出）\n"
         "  --cuda [--gpu N]   使用 GPU（需 CUDA 版 onnxruntime）\n"
         "  -h, --help         显示本帮助\n"
         "\n"
@@ -307,7 +298,7 @@ static void printUsage(const char* prog) {
         "  " << prog << " model.onnx ./imgs det --crop\n"
         "  " << prog << " model.onnx video.mp4 obb --show\n"
         "  " << prog << " model.onnx video.mp4 det --track\n"
-        "  " << prog << " model.onnx rtsp://192.168.1.64/stream det\n";
+        "  " << prog << " model.onnx ./imgs det --track\n";
 }
 
 static bool parseArgs(int argc, char** argv, Options& opt) {
@@ -381,12 +372,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // 输入类型自动判断：IP 流 / 本地视频 / 图片
+    // 输入类型自动判断：本地视频 / 图片（文件夹）
     InputType type = detectInputType(opt.input);
     switch (type) {
-        case InputType::IpStream:   printInfo(opt, "ip-stream"); return runVideoMode(yolo, opt, type);
-        case InputType::VideoFile:  printInfo(opt, "video-file"); return runVideoMode(yolo, opt, type);
-        case InputType::Image:      printInfo(opt, "image"); return runImageMode(yolo, opt);
+        case InputType::VideoFile:  printInfo(opt, "video-file"); return runVideoMode(yolo, opt);
+        case InputType::Image:      printInfo(opt, "image");      return runImageMode(yolo, opt);
     }
     return 0;
 }
