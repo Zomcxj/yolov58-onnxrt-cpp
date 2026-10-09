@@ -17,18 +17,42 @@ bool YolovOnnx::ReadLines(const std::string& label_file)
 {
     std::ifstream ifs(label_file);
 	std::string line;
+	_className.clear();
 
 	while (getline(ifs, line)) {
-		_className.push_back(line);
+		if (!line.empty() && line.back() == '\r') line.pop_back();   // 兼容 CRLF
+		if (!line.empty()) _className.push_back(line);
 	}
 
-    if (_className.size() != class_num) {
-        std::cout << "label_num do not match class_num !" << std::endl;
-        return false;
-    } else {
-        std::cout << "load " << label_file << " success !" << std::endl;
+    std::cout << "load " << label_file << " success !" << std::endl;
+    return true;
+}
+
+// 类别名配置：<模型目录>/<模型名>.txt，每行一个类别；
+// 文件缺失时回退 class_0..N；行数与模型类别数不符则报错
+bool YolovOnnx::LoadClassNames(const std::string& modelPath) {
+    size_t slash = modelPath.find_last_of("/\\");
+    std::string dir = (slash == std::string::npos) ? "" : modelPath.substr(0, slash + 1);
+    std::string name = (slash == std::string::npos) ? modelPath : modelPath.substr(slash + 1);
+    size_t dot = name.find_last_of('.');
+    std::string stem = (dot == std::string::npos) ? name : name.substr(0, dot);
+    std::string label_file = dir + stem + ".txt";
+
+    std::ifstream ifs(label_file);
+    if (ifs.good()) {
+        if (!ReadLines(label_file)) return false;
+        if ((int)_className.size() != class_num) {
+            std::cout << "label_num (" << _className.size() << ") != class_num (" << class_num << ")!" << std::endl;
+            return false;
+        }
         return true;
     }
+
+    _className.clear();
+    for (int i = 0; i < class_num; ++i)
+        _className.push_back("class_" + std::to_string(i));
+    std::cout << "no label file " << label_file << ", fallback to class_0.." << std::endl;
+    return true;
 }
 
 
@@ -185,6 +209,12 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
             _outputNodeDataType = tensor_info_output0.GetElementType();
             _outputTensorShape = tensor_info_output0.GetShape();
             auto tensor_info_output1 = type_info_output1.GetTensorTypeAndShapeInfo();
+            std::vector<int64_t> mask_shape = tensor_info_output1.GetShape();
+            {   // seg: output0 通道 = 4+nc+maskC（v8）/ 5+nc+maskC（v5）
+                bool v8seg = _outputTensorShape[1] < _outputTensorShape[2];
+                int dims = v8seg ? (int)_outputTensorShape[1] : (int)_outputTensorShape[2];
+                this->class_num = dims - (v8seg ? 4 : 5) - (int)mask_shape[1];
+            }
         }        
         else if (task == "cls") {
             if (_outputNodesNum != 1) {
@@ -214,6 +244,7 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
                 std::cout << "Classification model requires at least 2 classes." << std::endl;
                 return false;
             }
+            if (!LoadClassNames(modelPath)) return false;
             return true;
         }
         else {
@@ -233,6 +264,18 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
             _outputNodeDataType = tensor_info_output0.GetElementType();
             _outputTensorShape = tensor_info_output0.GetShape();
         }
+
+		// 类别数：det/obb/pose 由输出形状推导（与 OnnxBatchDetect 运行期推导一致）
+		if (task != "cls" && task != "seg") {
+			bool v8 = _outputTensorShape[1] < _outputTensorShape[2];   // v8: [bs, 4+nc, anchors]
+			int dimensions = v8 ? (int)_outputTensorShape[1] : (int)_outputTensorShape[2];
+			if (task == "det")          this->class_num = dimensions - (v8 ? 4 : 5);
+			else if (task == "obb")     this->class_num = dimensions - (v8 ? 5 : 5 + 180);
+			else if (task == "pose")    this->class_num = dimensions - 4 - 3 * key_point_num;
+		}
+
+		// 类别名：txt 配置或回退
+		if (!LoadClassNames(modelPath)) return false;
 
 		//warm up
 		if (isCuda && warmUp) {

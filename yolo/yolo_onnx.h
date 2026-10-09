@@ -137,6 +137,7 @@ public:
     void DrawPred(cv::Mat& img, std::vector<YolovOutput> result);
     void GetMask(const cv::Mat& maskProposals, const cv::Mat& maskProtos, YolovOutput& output, const MaskParams& maskParams);
     bool ReadLines(const std::string& label_file);
+    bool LoadClassNames(const std::string& modelPath);   // 读 <模型名>.txt 或回退 class_0..N
 
 private:
 
@@ -195,32 +196,5 @@ private:
 public:
 
 	int _batchSize = 1;          // if multi-batch, set this
-    // std::vector<std::string> _className = {"blur", "fog", "night", "normal", "rain", "snow"};
-	// std::vector<std::string> _className = {"NorRider", "NoHelmet", "HasPassenger", "Head", "ReRider", "SunShade"};
-    // std::vector<std::string> _className = {"Li", "Heng", "Zong", "Truck"};
-    // std::vector<std::string> _className = {"SCar", "MCar", "BCar", "Rider", "Person"};
-    // std::vector<std::string> _className = {"vertical", "horizon", "lengthways", "Truck"};
-    //  std::vector<std::string> _className = {"LaoTouLe", "LaoTouLe", "Car", "ECar"};
-    // std::vector<std::string> _className = {"scar", "bcar"};
-    // std::vector<std::string> _className = {"light", "leftwait"};
-    // std::vector<std::string> _className = {"red", "yellow", "green", "black", "lvbo", "lvbono"};
-    // std::vector<std::string> _className = {"person"};
-    std::vector<std::string> _className = {"drone"};
-    // std::vector<std::string> _className = {
-    //     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-    //     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-    //     "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-    //     "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-    //     "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-    //     "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-    //     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-    //     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-    //     "hair drier", "toothbrush"
-    // };
-
-    // std::vector<std::string> _className = {
-	// 	"plane", "baseball-diamond", "bridge", "ground-track-field", 
-	// 	"small-vehicle", "large-vehicle", "ship", "tennis-court", 
-	// 	"basketball-court", "storage-tank", "soccer-ball-field", "roundabout",
-	// 	"harbor", "swimming-pool", "helicopter", "container-crane"};
+	std::vector<std::string> _className;   // 类别名：<模型名>.txt（每行一个），缺省 class_0..N
 };

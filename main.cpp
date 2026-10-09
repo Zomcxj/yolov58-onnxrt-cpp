@@ -1,44 +1,7 @@
-// ============================================================================
-// yolov-onnxrt —— YOLO ONNX Runtime 推理工具（det/obb/pose/seg/cls）
-//
-// 用法（前三个位置参数与旧版一致）：
-//   yolov-onnxrt <model.onnx> <input> <task> [options]
-//
-//   <model.onnx>  模型路径
-//   <input>       输入来源，按内容自动判断：
-//                   rtsp:// 或 http(s)://  -> IP 视频流接入（逐帧推理，默认存帧图）
-//                   *.mp4/*.avi/*.mov 等   -> 本地视频文件（逐帧推理，默认存结果视频）
-//                   其余（图片/目录/glob）  -> 图片写入推理（逐帧 imwrite 存结果图）
-//   <task>        det | obb | pose | seg | cls
-//
-// 常用示例：
-//   # 图片遍历 + 原图推理（旧版默认行为）
-//   yolov-onnxrt model.onnx ./imgs det
-//   # 图片遍历 + 裁剪推理（切块 -> 多线程并行 -> 跨块合并）
-//   yolov-onnxrt model.onnx ./imgs obb --crop --crop-size 1280 --threads 4
-//   # 本地视频文件推理（结果存带框视频）
-//   yolov-onnxrt model.onnx video.mp4 det
-//   # 检测 + 跟踪（ByteTrack，打印 track id 并画框）
-//   yolov-onnxrt model.onnx video.mp4 det --track
-//   # IP 视频流接入（RTSP，逐帧推理存帧图）
-//   yolov-onnxrt model.onnx rtsp://192.168.1.64:554/stream obb --crop
-//
-// 常用参数：
-//   --crop              启用裁剪推理（仅 det/obb 生效，其余自动回退原图）
-//   --crop-size N       切块边长，默认 1280
-//   --crop-overlap N    相邻切块重叠像素：默认自动(20%且最少200px)，0=无重叠
-//   --threads N         裁剪并行线程数，默认 = CPU 核数
-//   --conf F            跨块合并置信度阈值，默认 0.5
-//   --track             检测后接 ByteTrack 跟踪：打印 track id 并画框（cls 任务忽略）
-//   --save-dir DIR      结果输出目录，默认 ../output/
-//   --no-save           不保存结果（只推理打印耗时；IP 流不存帧图、视频不存结果视频）
-//   --show              IP 流/视频模式弹窗预览（按 q/ESC 退出）
-//   --cuda [--gpu N]    使用 GPU（需 CUDA 版 onnxruntime）
-//   -h, --help          显示本帮助
-//
-// 代码组织：本文件直接调用旧接口（YolovOnnx::OnnxDetect / obb.h 的
-//   imgSplit + obboxFilter/hbboxFilter + tileDetectMultiThread），无中间抽象层。
-// ============================================================================
+// yolov-onnxrt：YOLO ONNX Runtime 推理工具（det/obb/pose/seg/cls）
+// 用法：yolov-onnxrt <model.onnx> <input> <task> [options]，详见 -h
+// <input> 按内容自动判断：rtsp/http 流 | 视频文件 | 图片/目录/glob
+// 类别名：模型旁 <模型名>.txt（每行一个，可选，缺省 class_0..N）
 #include "obb.h"
 #include "yolo_onnx.h"
 #include "MYTrack.h"   // ByteTrack 封装（检测 -> 跟踪）
@@ -50,9 +13,7 @@
 #include <string>
 #include <vector>
 
-// ----------------------------------------------------------------------------
-// 参数配置（旧版散落的配置集中到这里，便于修改）
-// ----------------------------------------------------------------------------
+// 参数配置
 struct Options {
     std::string modelPath;   // argv[1]
     std::string input;       // argv[2]：图片/目录 / 视频文件 / RTSP 流
@@ -335,6 +296,7 @@ static void printUsage(const char* prog) {
         "  --threads N        裁剪并行线程数，默认 = CPU 核数\n"
         "  --conf F           跨块合并置信度阈值，默认 0.5\n"
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
+        "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
         "  --save-dir DIR     结果输出目录，默认 ../output/\n"
         "  --no-save          不保存结果（IP 流不存帧图、视频不存结果视频）\n"
         "  --show             IP 流/视频模式弹窗预览（按 q/ESC 退出）\n"
