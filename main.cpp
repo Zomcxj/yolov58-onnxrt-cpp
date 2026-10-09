@@ -13,6 +13,29 @@
 #include <string>
 #include <vector>
 
+// ============================================================================
+// 项目对接（除 OnnxDetectv2 外，本文件其余全部是本地测试代码）
+//
+//   YolovOnnx yolo;
+//   yolo.ReadModel(modelPath, task, isCuda, cudaID, true);            // 启动时一次
+//   OnnxDetectv2(yolo, img, task, false, cv::Size(), -1, 0.f, 0, result); // 每张图
+//   yolo.DrawPred(img, result);                                       // 可选：画框
+//
+//   result 已映射回原图坐标；crop=true 走滑窗（det/obb，内部同样复用 OnnxDetect）
+// ============================================================================
+static void OnnxDetectv2(YolovOnnx& yolo, cv::Mat& img, const std::string& task,
+                      bool crop, const cv::Size& cropSize, int cropOverlap,
+                      float conf, int threads, std::vector<YolovOutput>& result) {
+    if (crop && (task == "det" || task == "obb"))
+        result = tileDetectMultiThread(yolo, img, task, cropSize, cropOverlap, conf, threads);
+    else
+        yolo.OnnxDetect(img, result);
+}
+
+// ============================================================================
+// 以下全部是本地测试代码（Options/解析/文件夹遍历/视频/跟踪），对接不需要
+// ============================================================================
+
 // 参数配置
 struct Options {
     std::string modelPath;   // argv[1]
@@ -30,6 +53,13 @@ struct Options {
     bool   isCuda = false;
     int    cudaID = 0;
 };
+
+// 测试便捷封装：从 Options 取参数调对接接口
+static void OnnxDetectv2(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
+                      std::vector<YolovOutput>& result) {
+    OnnxDetectv2(yolo, img, opt.task, opt.crop, opt.cropSize, opt.cropOverlap,
+              opt.conf, opt.threads, result);
+}
 
 // 输入类型自动判断
 enum class InputType { Image, VideoFile };
@@ -125,19 +155,6 @@ static void printTracks(const std::vector<Object>& tracks) {
     }
 }
 
-// ----------------------------------------------------------------------------
-// 项目对接接口：单图推理（cv::Mat 入，result 已映射回原图坐标）
-// 原图推理或裁剪推理（多线程）由 opt.crop 决定；画框/取结果都在调用侧完成
-// ----------------------------------------------------------------------------
-static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
-                      std::vector<YolovOutput>& result) {
-    if (opt.crop && (opt.task == "det" || opt.task == "obb"))
-        result = tileDetectMultiThread(yolo, img, opt.task, opt.cropSize,
-                                       opt.cropOverlap, opt.conf, opt.threads);
-    else
-        yolo.OnnxDetect(img, result);
-}
-
 static void printInfo(const Options& opt, const char* mode) {
     std::cout << "model: " << opt.modelPath
               << " | task: " << opt.task
@@ -175,7 +192,7 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
 
         Clock::time_point t0 = Clock::now();
         std::vector<YolovOutput> result;
-        detectOne(yolo, img, opt, result);
+        OnnxDetectv2(yolo, img, opt, result);
         double ms = elapsedMs(t0);
 
         if (opt.track) {                       // 检测 -> 跟踪
@@ -235,7 +252,7 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
     while (cap.read(frame)) {
         Clock::time_point t0 = Clock::now();
         std::vector<YolovOutput> result;
-        detectOne(yolo, frame, opt, result);
+        OnnxDetectv2(yolo, frame, opt, result);
         double ms = elapsedMs(t0);
 
         if (opt.track) {                       // 检测 -> 跟踪
