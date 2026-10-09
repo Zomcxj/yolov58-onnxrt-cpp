@@ -39,8 +39,7 @@ float MYTrack::trackDetIous(std::vector<float> lbox, cv::Rect rbox) {
 // 跟踪
 // 纯变换：只吃检测框、只吐跟踪框，不碰图像——所以没有 cv::Mat 参数。
 // 输出语义：框来自匹配上的检测框(res)，不是卡尔曼预测框(tlwh)；tlwh 仅用于关联距离。
-void MYTrack::doTrack(const std::vector<Object>& res, std::vector<Object>& track_res,
-                      double dt_s) {
+void MYTrack::doTrack(const std::vector<Object>& res, std::vector<Object>& track_res) {
     
     num_frames ++;
     #if DEBUG
@@ -72,17 +71,8 @@ void MYTrack::doTrack(const std::vector<Object>& res, std::vector<Object>& track
         if (min_distance < 300) {
             min_box.track_id = output_stracks[i].track_id;
             min_box.track_time = output_stracks[i].track_time;
-            // 卡尔曼状态为 [cx, cy, a, h, vx, vy, va, vh]（见 bytetrack/dataType.h），
-            // 其中 vx/vy 是 xyah 空间下"每检测步的位移"。BYTE 的观测模型按步长 1 递推，
-            // 而这里的检测步长是不规则的(取决于推理耗时)，所以必须除以实际 dt_s 才能
-            // 得到像素/秒。dt_s 未知时置 0：不确定的速度不如没有速度。
-            if (dt_s > 1e-3) {
-                min_box.vx = output_stracks[i].mean(4) / float(dt_s);
-                min_box.vy = output_stracks[i].mean(5) / float(dt_s);
-            } else {
-                min_box.vx = 0.0f;
-                min_box.vy = 0.0f;
-            }
+            min_box.vx = 0.0f;   // 速度（px/s）是 PTZ 需求，随 dt_s 一并移除
+            min_box.vy = 0.0f;
             track_res.push_back(min_box);
         }
     }
