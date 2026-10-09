@@ -26,7 +26,11 @@ aux_source_directory(yolo src1)
 aux_source_directory(bytetrack src2)
 add_executable(${PROJECT_NAME} ${src1} ${src2} main.cpp)
 
+# 对接示例（独立可执行，最小调用流程；同样需要 yolo/bytetrack 源码）
+add_executable(api_demo api_demo.cpp ${src1} ${src2})
+
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${ONNX_LIB} pthread)
+target_link_libraries(api_demo ${OpenCV_LIBS} ${ONNX_LIB} pthread)
 
 # Linux 运行时免设 LD_LIBRARY_PATH
 if(NOT WIN32)

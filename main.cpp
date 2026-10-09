@@ -13,29 +13,7 @@
 #include <string>
 #include <vector>
 
-// ============================================================================
-// 项目对接（本区之外的全部是本地测试代码）
-//
-//   YolovOnnx yolo;
-//   yolo.ReadModel(modelPath, task, false);  // 启动时一次（isCuda 显式传，GPU 传 true）
-//   OnnxDetectv2(yolo, img, task, result);  // 每张图，result 已映射回原图坐标
-//   yolo.DrawPred(img, result);             // 可选：画框
-//
-//   跟踪（可选）：直接用 MYTrack（ByteTrack 封装）
-//   MYTrack tracker;
-//   std::vector<Object> objs, tracks;
-//   tracker.resultStructTransfer(result, objs);
-//   tracker.doTrack(objs, tracks);
-// ============================================================================
-static void OnnxDetectv2(YolovOnnx& yolo, cv::Mat& img, const std::string& task,
-                         std::vector<YolovOutput>& result,
-                         bool crop = false, const cv::Size& cropSize = cv::Size(1280, 1280),
-                         int cropOverlap = -1, float conf = 0.5f, int threads = 0) {
-    if (crop && (task == "det" || task == "obb"))
-        result = tileDetectMultiThread(yolo, img, task, cropSize, cropOverlap, conf, threads);
-    else
-        yolo.OnnxDetect(img, result);
-}
+// 项目对接示例见 api_demo.cpp（原图推理/滑窗/跟踪后画图 的最小流程）；本文件是本地测试
 
 // ============================================================================
 // 以下全部是本地测试代码（Options/解析/文件夹遍历/视频/跟踪），对接不需要
@@ -60,11 +38,15 @@ struct Options {
     int    cudaID = 0;
 };
 
-// 测试便捷封装：从 Options 取参数调对接接口
-static void OnnxDetectv2(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
+// 本地测试：按 --crop 分发（原图推理 / 滑窗推理）
+static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
                       std::vector<YolovOutput>& result) {
-    OnnxDetectv2(yolo, img, opt.task, result, opt.crop, opt.cropSize,
-                 opt.cropOverlap, opt.conf, opt.threads);
+    if (opt.crop && (opt.task == "det" || opt.task == "obb")) {
+        result = tileDetectMultiThread(yolo, img, opt.task, opt.cropSize,
+                                       opt.cropOverlap, opt.conf, opt.threads);
+    } else {
+        yolo.OnnxDetect(img, result);
+    }
 }
 
 // 输入类型自动判断
@@ -112,23 +94,6 @@ static double elapsedMs(Clock::time_point t0) {
     return std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
 }
 
-// 把跟踪 id 回写到对应检测框（DrawPred 标签即显示 id:N）
-// 匹配依据：Object.rect 就来自对应检测框的 box，坐标一致
-static void tagTrackIds(const std::vector<Object>& tracks, std::vector<YolovOutput>& result) {
-    for (size_t i = 0; i < tracks.size(); ++i) {
-        const Object& t = tracks[i];
-        for (size_t j = 0; j < result.size(); ++j) {
-            YolovOutput& d = result[j];
-            if (d.track_id != -1) continue;
-            if (d.box.x == (int)t.rect.x && d.box.y == (int)t.rect.y &&
-                d.box.width == (int)t.rect.width && d.box.height == (int)t.rect.height) {
-                d.track_id = t.track_id;
-                break;
-            }
-        }
-    }
-}
-
 // 打印跟踪结果（每条轨迹一行）
 static void printTracks(const std::vector<Object>& tracks) {
     for (size_t i = 0; i < tracks.size(); ++i) {
@@ -171,6 +136,7 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
     MYTrack tracker;                      // --track：跨图片保持轨迹
     std::vector<Object> tracks;
     int nFail = 0;
+    double totalMs = 0;
     for (size_t k = 0; k < files.size(); ++k) {
         const std::string& f = files[k];
         cv::Mat img = cv::imread(f);
@@ -178,8 +144,9 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
 
         Clock::time_point t0 = Clock::now();
         std::vector<YolovOutput> result;
-        OnnxDetectv2(yolo, img, opt, result);
+        detectOne(yolo, img, opt, result);
         double ms = elapsedMs(t0);
+        totalMs += ms;
 
         if (opt.track) {                       // 检测 -> 跟踪（直接用 MYTrack）
             std::vector<Object> objs;
@@ -198,7 +165,9 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         std::cout << "]  " << (int)(ms + 0.5) << " ms" << std::endl;
         if (opt.track) printTracks(tracks);
     }
-    std::cout << "done. " << files.size() << " image(s), " << nFail << " failed." << std::endl;
+    std::cout << "done. " << files.size() << " image(s), " << nFail << " failed"
+              << ", avg " << (files.size() ? (int)(totalMs / files.size() + 0.5) : 0) << " ms/img"
+              << ", total " << totalMs / 1000.0 << " s" << std::endl;
     return (nFail > 0 && nFail == (int)files.size()) ? 1 : 0;
 }
 
@@ -238,7 +207,7 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
     while (cap.read(frame)) {
         Clock::time_point t0 = Clock::now();
         std::vector<YolovOutput> result;
-        OnnxDetectv2(yolo, frame, opt, result);
+        detectOne(yolo, frame, opt, result);
         double ms = elapsedMs(t0);
 
         if (opt.track) {                       // 检测 -> 跟踪（直接用 MYTrack）
@@ -267,7 +236,8 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
         if (opt.track) printTracks(tracks);
     }
     std::cout << "done. " << frameIdx << " frame(s), avg "
-              << (frameIdx ? (int)(totalMs / frameIdx + 0.5) : 0) << " ms/frame";
+              << (frameIdx ? (int)(totalMs / frameIdx + 0.5) : 0) << " ms/frame"
+              << ", total " << totalMs / 1000.0 << " s";
     if (saveVideo) std::cout << ", saved: " << videoOutPath;
     std::cout << std::endl;
     return 0;
