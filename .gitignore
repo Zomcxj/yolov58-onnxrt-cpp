@@ -1,4 +1,5 @@
 build/
+build-release/
 compile_commands.json
 *.exe
 *.dll
@@ -6,9 +7,8 @@ compile_commands.json
 test_*.log
 img_*.log
 video_*.mp4
-output/orig/
-output/crop/
+output/
+release/
 diag/
 3rdparty/
-release/
-build-release/
+/*.txt
