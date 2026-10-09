@@ -1,11 +1,6 @@
-// yolov-onnxrt：YOLO ONNX Runtime 推理工具（det/obb/pose/seg/cls）
-// 用法：yolov-onnxrt <model.onnx> <input> <task> [options]，详见 -h
-// <input> 按内容自动判断：视频文件 | 图片/目录/glob
-// 类别名：模型旁 <模型名>.txt（每行一个，可选，缺省 class_0..N）；或 --labels 指定
 #include "obb.h"
 #include "yolo_onnx.h"
-#include "MYTrack.h"   // ByteTrack 封装（检测 -> 跟踪）
-
+#include "MYTrack.h"
 #include <chrono>
 #include <cctype>
 #include <cstring>
@@ -13,11 +8,7 @@
 #include <string>
 #include <vector>
 
-// 项目对接示例见 api_demo.cpp（原图推理/滑窗/跟踪后画图 的最小流程）；本文件是本地测试
 
-// ============================================================================
-// 以下全部是本地测试代码（Options/解析/文件夹遍历/视频/跟踪），对接不需要
-// ============================================================================
 
 // 参数配置
 struct Options {
@@ -38,7 +29,7 @@ struct Options {
     int    cudaID = 0;
 };
 
-// 本地测试：按 --crop 分发（原图推理 / 滑窗推理）
+// 按 --crop 分发（原图推理 / 滑窗推理）
 static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
                       std::vector<YolovOutput>& result) {
     if (opt.crop && (opt.task == "det" || opt.task == "obb")) {
@@ -51,10 +42,6 @@ static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
 
 // 输入类型自动判断
 enum class InputType { Image, VideoFile };
-
-// ----------------------------------------------------------------------------
-// 工具函数
-// ----------------------------------------------------------------------------
 static std::string toLower(std::string s) {
     for (size_t i = 0; i < s.size(); ++i)
         s[i] = (char)std::tolower((unsigned char)s[i]);
@@ -156,7 +143,7 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         }
 
         if (opt.task != "cls") {              // cls 无框可画，与原行为一致
-            if (opt.track) tagTrackIds(tracks, result);
+            if (opt.track) MYTrack::tagTrackIds(tracks, result);
             yolo.DrawPred(img, result);
             if (opt.save) cv::imwrite(savePath + pathBasename(f), img);
         }
@@ -218,7 +205,7 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
         }
 
         if (opt.task != "cls") {
-            if (opt.track) tagTrackIds(tracks, result);
+            if (opt.track) MYTrack::tagTrackIds(tracks, result);
             yolo.DrawPred(frame, result);
         }
 

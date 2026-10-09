@@ -71,7 +71,7 @@ void MYTrack::doTrack(const std::vector<Object>& res, std::vector<Object>& track
         if (min_distance < 300) {
             min_box.track_id = output_stracks[i].track_id;
             min_box.track_time = output_stracks[i].track_time;
-            min_box.vx = 0.0f;   // 速度（px/s）是 PTZ 需求，随 dt_s 一并移除
+            min_box.vx = 0.0f;
             min_box.vy = 0.0f;
             track_res.push_back(min_box);
         }

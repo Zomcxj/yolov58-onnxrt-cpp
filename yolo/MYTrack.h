@@ -1,6 +1,5 @@
 #pragma once
 #include <vector>
-#include <unordered_map>
 #include "BYTETracker.h"
 #include "yolo_onnx.h"
 
@@ -39,8 +38,3 @@ private:
     BYTETracker tracker;
 
 };
-
-// 便捷封装：以自由函数形式调用（内部转 MYTrack::tagTrackIds）
-inline void tagTrackIds(const std::vector<Object>& tracks, std::vector<YolovOutput>& result) {
-    MYTrack::tagTrackIds(tracks, result);
-}
