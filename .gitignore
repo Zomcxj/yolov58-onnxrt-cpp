@@ -12,3 +12,4 @@ release/
 diag/
 3rdparty/
 /*.txt
+.clangd
