@@ -1,7 +1,7 @@
 // yolov-onnxrt：YOLO ONNX Runtime 推理工具（det/obb/pose/seg/cls）
 // 用法：yolov-onnxrt <model.onnx> <input> <task> [options]，详见 -h
 // <input> 按内容自动判断：视频文件 | 图片/目录/glob
-// 类别名：模型旁 <模型名>.txt（每行一个，可选，缺省 class_0..N）
+// 类别名：模型旁 <模型名>.txt（每行一个，可选，缺省 class_0..N）；或 --labels 指定
 #include "obb.h"
 #include "yolo_onnx.h"
 #include "MYTrack.h"   // ByteTrack 封装（检测 -> 跟踪）
@@ -52,6 +52,7 @@ struct Options {
     float  conf = 0.5f;      // 跨块合并置信度阈值
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
     bool   track = false;    // --track：检测后接 ByteTrack 跟踪（cls 无框，已在 main 里关闭）
+    std::string labels;      // --labels：类别名 txt；空 = <模型名>.txt
     std::string savePath = "../output/";
     bool   save = true;      // --no-save 关闭保存
     bool   show = false;     // 视频预览
@@ -291,6 +292,7 @@ static void printUsage(const char* prog) {
         "  --conf F           跨块合并置信度阈值，默认 0.5\n"
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
         "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
+        "  --labels FILE     类别名 txt（每行一个；缺省 <模型名>.txt，再缺省 class_0..N）\n"
         "  --save-dir DIR     结果输出目录，默认 ../output/\n"
         "  --no-save          不保存结果（只推理打印耗时）\n"
         "  --show             视频模式弹窗预览（按 q/ESC 退出）\n"
@@ -328,6 +330,7 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
             else if (a == "--threads")      opt.threads = std::stoi(need("--threads"));
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));
             else if (a == "--track")        opt.track = true;
+            else if (a == "--labels")       opt.labels = need("--labels");
             else if (a == "--save-dir")     opt.savePath = need("--save-dir");
             else if (a == "--no-save")      opt.save = false;
             else if (a == "--show")         opt.show = true;
@@ -370,6 +373,7 @@ int main(int argc, char** argv) {
     }
 
     YolovOnnx yolo;
+    yolo.labelFile = opt.labels;   // 空 = 用 <模型名>.txt
     if (!yolo.ReadModel(opt.modelPath, opt.task, opt.isCuda, opt.cudaID)) {
         std::cout << "cannot load model: " << opt.modelPath << std::endl;
         return 1;

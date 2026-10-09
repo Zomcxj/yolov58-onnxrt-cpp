@@ -160,9 +160,9 @@ private:
 	float _classThreshold = 0.6;
 	float _nmsThreshold = 0.6;
 	float _maskThreshold = 0.5;
-    int key_point_num = 17;  //_bodyKeyPoints.size(), shape[x, y, confidence]
+	int key_point_num = 17;  //_bodyKeyPoints.size(), shape[x, y, confidence]
 	int class_num = 80;
-    std::string task;
+	std::string task;
 	PoseParams poseparams;
 
 	// ONNXRUNTIME	
@@ -196,5 +196,6 @@ private:
 public:
 
 	int _batchSize = 1;          // if multi-batch, set this
-	std::vector<std::string> _className;   // 类别名：<模型名>.txt（每行一个），缺省 class_0..N
+	std::vector<std::string> _className;   // 类别名（来自 labelFile 或 <模型名>.txt，每行一个）
+	std::string labelFile;                 // 类别名 txt 路径；空 = <模型名>.txt，再缺省 class_0..N
 };

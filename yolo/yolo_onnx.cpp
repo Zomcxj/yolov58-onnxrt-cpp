@@ -28,30 +28,37 @@ bool YolovOnnx::ReadLines(const std::string& label_file)
     return true;
 }
 
-// 类别名配置：<模型目录>/<模型名>.txt，每行一个类别；
-// 文件缺失时回退 class_0..N；行数与模型类别数不符则报错
+// 类别名配置路径优先级：labelFile（--labels / 代码直接赋值）> <模型目录>/<模型名>.txt > class_0..N
 bool YolovOnnx::LoadClassNames(const std::string& modelPath) {
-    size_t slash = modelPath.find_last_of("/\\");
-    std::string dir = (slash == std::string::npos) ? "" : modelPath.substr(0, slash + 1);
-    std::string name = (slash == std::string::npos) ? modelPath : modelPath.substr(slash + 1);
-    size_t dot = name.find_last_of('.');
-    std::string stem = (dot == std::string::npos) ? name : name.substr(0, dot);
-    std::string label_file = dir + stem + ".txt";
+    std::string label_file = labelFile;
+    bool explicit_file = !label_file.empty();
+    if (!explicit_file) {
+        size_t slash = modelPath.find_last_of("/\\");
+        std::string dir = (slash == std::string::npos) ? "" : modelPath.substr(0, slash + 1);
+        std::string name = (slash == std::string::npos) ? modelPath : modelPath.substr(slash + 1);
+        size_t dot = name.find_last_of('.');
+        std::string stem = (dot == std::string::npos) ? name : name.substr(0, dot);
+        label_file = dir + stem + ".txt";
+    }
 
     std::ifstream ifs(label_file);
-    if (ifs.good()) {
-        if (!ReadLines(label_file)) return false;
-        if ((int)_className.size() != class_num) {
-            std::cout << "label_num (" << _className.size() << ") != class_num (" << class_num << ")!" << std::endl;
+    if (!ifs.good()) {
+        if (explicit_file) {
+            std::cout << "label file not found: " << label_file << std::endl;
             return false;
         }
+        _className.clear();
+        for (int i = 0; i < class_num; ++i)
+            _className.push_back("class_" + std::to_string(i));
+        std::cout << "no label file, fallback to class_0.." << std::endl;
         return true;
     }
 
-    _className.clear();
-    for (int i = 0; i < class_num; ++i)
-        _className.push_back("class_" + std::to_string(i));
-    std::cout << "no label file " << label_file << ", fallback to class_0.." << std::endl;
+    if (!ReadLines(label_file)) return false;
+    if ((int)_className.size() != class_num) {
+        std::cout << "label_num (" << _className.size() << ") != class_num (" << class_num << ")!" << std::endl;
+        return false;
+    }
     return true;
 }
 
