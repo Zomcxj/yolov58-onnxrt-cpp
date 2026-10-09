@@ -653,6 +653,8 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 
             std::string conf = cv::format("%.2f", result[i].confidence);
             std::string label = _className[result[i].id] + ":" + conf;
+            if (result[i].track_id > 0)     // --track 时由 main 写入，标签后附跟踪 id
+                label += " id=" + std::to_string(result[i].track_id);
 
             int baseLine;
             cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);

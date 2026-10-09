@@ -100,7 +100,7 @@ struct YolovOutput {
     cv::RotatedRect rotatedBox;  // obb结果矩形框
 	cv::Mat boxMask;             // 掩码图
 	std::vector<PoseKeyPoint> keyPoints; // 位姿
-    int track_id;
+    int track_id = -1;
 };
 
 

@@ -139,14 +139,20 @@ static void runTrack(MYTrack& tracker, const std::vector<YolovOutput>& det,
     tracker.doTrack(objs, tracks, dt_s);
 }
 
-// 画跟踪框与 track id（叠在检测框之上，id 用红色区分）
-static void drawTracks(cv::Mat& img, const std::vector<Object>& tracks) {
+// 把跟踪 id 回写到对应检测框（DrawPred 标签后附 id=N），不另画第二个框
+// 匹配依据：Object.rect 就来自对应检测框的 box，坐标一致
+static void tagTrackIds(const std::vector<Object>& tracks, std::vector<YolovOutput>& result) {
     for (size_t i = 0; i < tracks.size(); ++i) {
         const Object& t = tracks[i];
-        cv::Rect r((int)t.rect.x, (int)t.rect.y, (int)t.rect.width, (int)t.rect.height);
-        cv::rectangle(img, r, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
-        cv::putText(img, "id=" + std::to_string(t.track_id), cv::Point(r.x, r.y - 5),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+        for (size_t j = 0; j < result.size(); ++j) {
+            YolovOutput& d = result[j];
+            if (d.track_id != -1) continue;
+            if (d.box.x == (int)t.rect.x && d.box.y == (int)t.rect.y &&
+                d.box.width == (int)t.rect.width && d.box.height == (int)t.rect.height) {
+                d.track_id = t.track_id;
+                break;
+            }
+        }
     }
 }
 
@@ -220,8 +226,8 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         }
 
         if (opt.task != "cls") {              // cls 无框可画，与原行为一致
+            if (opt.track) tagTrackIds(tracks, result);
             yolo.DrawPred(img, result);
-            if (opt.track) drawTracks(img, tracks);
             if (opt.save) cv::imwrite(savePath + pathBasename(f), img);
         }
         std::cout << pathBasename(f) << "  [" << result.size() << " objs";
@@ -285,8 +291,8 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt, InputType type) {
         }
 
         if (opt.task != "cls") {
+            if (opt.track) tagTrackIds(tracks, result);
             yolo.DrawPred(frame, result);
-            if (opt.track) drawTracks(frame, tracks);
         }
 
         if (saveImage) cv::imwrite(savePath + "stream_" + std::to_string(frameIdx) + ".jpg", frame);
