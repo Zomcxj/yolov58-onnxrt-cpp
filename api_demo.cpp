@@ -40,7 +40,8 @@ int main(int argc, char** argv) {
 
     std::cout << result.size() << " objs, " << tracks.size() << " tracks" << std::endl;
 
-    // 滑窗推理（小目标增强，需要时替换上面的 OnnxDetect，并补 #include "obb.h"）：
-    // std::vector<YolovOutput> result = tileDetectMultiThread(yolo, img, task, cv::Size(800, 640), 200, 0.5f, 4);
+    // 滑窗推理（小目标增强，需要时替换上面的 OnnxDetect，并补 #include "slide_deal.h"）：
+    // 重叠分轴：第 5、6 参 = 列(x)/行(y) 重叠像素；两轴同值时可用 7 参重载 (…, cv::Size(480,480), 200, 0.3f, 4)
+    // std::vector<YolovOutput> result = tileDetectMultiThread(yolo, img, task, cv::Size(480, 480), 60, 240, 0.3f, 4);
     return 0;
 }

@@ -23,8 +23,7 @@ bool YolovOnnx::ReadLines(const std::string& label_file)
 		if (!line.empty() && line.back() == '\r') line.pop_back();   // 兼容 CRLF
 		if (!line.empty()) _className.push_back(line);
 	}
-
-    std::cout << "load " << label_file << " success !" << std::endl;
+    std::cout << "load " << label_file << " success !" << std::endl;      	
     return true;
 }
 
@@ -112,13 +111,15 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
 		{
 			std::cout << "************* Infer model on GPU! *************" << std::endl;
 
-        // #if ORT_API_VERSION < ORT_OLD_VISON
-        //     OrtCUDAProviderOptions cudaOption;
-        //     cudaOption.device_id = cudaID;
-        //     _OrtSessionOptions.AppendExecutionProvider_CUDA(cudaOption);   
-        // #else
-        //     OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(_OrtSessionOptions, cudaID);
-        // #endif
+        #if ORT_API_VERSION < ORT_OLD_VISON
+            // Windows（CPU 包）下注释保编译：直连 CUDA 符号仅 GPU 包导出。
+            // Linux GPU 端取消注释使用（已验证 GPU 推理 OK），后续自行统一。
+            // OrtCUDAProviderOptions cudaOption;
+            // cudaOption.device_id = cudaID;
+            // _OrtSessionOptions.AppendExecutionProvider_CUDA(cudaOption);
+        #else
+            // OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(_OrtSessionOptions, cudaID);
+        #endif
 		}
 		else
 		{
@@ -684,7 +685,7 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 
     for (int i = 0; i < result.size(); i++) 
     {
-        if (result[i].confidence > 0.5)
+        if (result[i].confidence > _classThreshold)
         {   
             int idx = result[i].id + 3;
             cv::Scalar color = cv::Scalar(37 * idx * idx % 255, 17 * idx * idx % 255, 29 * idx * idx % 255);
@@ -706,15 +707,18 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
             }
 
             std::string conf = cv::format("%.2f", result[i].confidence);
-            // 有跟踪 id 时只显示 id，否则显示类别+置信度
-            std::string label = (result[i].track_id > 0)
-                ? ("id:" + std::to_string(result[i].track_id))
-                : (_className[result[i].id] + ":" + conf);
+            // 标签按开关拼装：类别 / 置信度 / 跟踪 id（默认只显示类别名）
+            std::string label;
+            if (drawClass) label += _className[result[i].id];
+            if (drawConf)  { if (!label.empty()) label += " "; label += conf; }
+            if (drawId && result[i].track_id > 0) { if (!label.empty()) label += " "; label += "id:" + std::to_string(result[i].track_id); }
 
-            int baseLine;
-            cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);
-            cv::rectangle(img, cv::Point(left, top - labelSize.height - 2), cv::Point(left + labelSize.width, top - 2), color, -1, cv::LINE_AA);
-            cv::putText(img, label, cv::Point(left, top - 2), cv::FONT_HERSHEY_COMPLEX, scale, cv::Scalar(225, 255, 255), thickness, cv::LINE_AA);
+            if (!label.empty()) {
+                int baseLine;
+                cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);
+                cv::rectangle(img, cv::Point(left, top - labelSize.height - 2), cv::Point(left + labelSize.width, top - 2), color, -1, cv::LINE_AA);
+                cv::putText(img, label, cv::Point(left, top - 2), cv::FONT_HERSHEY_COMPLEX, scale, cv::Scalar(225, 255, 255), thickness, cv::LINE_AA);
+            }
 
             std::cout << _className[result[i].id] << " @ " << conf << std::endl;
 

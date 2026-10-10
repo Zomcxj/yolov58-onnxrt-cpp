@@ -1,4 +1,4 @@
-#include "obb.h"
+#include "slide_deal.h"
 
 #include <atomic>
 #include <thread>
@@ -138,7 +138,7 @@ static double iou_poly(std::vector<double> p, std::vector<double> q) {
 }
 
 // cut oriimg with overlap（矩形块：cropSize = 宽×高）
-std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropSize, int overlap) {
+std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropSize, int overlapW, int overlapH) {
 
     std::vector<std::vector<int>> setxywh;
 
@@ -147,16 +147,17 @@ std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropS
 
     int cropW = cropSize.width  > 0 ? cropSize.width  : 1;
     int cropH = cropSize.height > 0 ? cropSize.height : 1;
-    if (overlap < 0) overlap = 0;
-    if (overlap >= cropW) overlap = cropW - 1;   // 防止切块步长<=0
-    if (overlap >= cropH) overlap = cropH - 1;
-    int stepW = cropW - overlap;                 // 相邻块起始间距 = 块宽 - 重叠
-    int stepH = cropH - overlap;
+    if (overlapW < 0) overlapW = 0;
+    if (overlapH < 0) overlapH = 0;
+    if (overlapW >= cropW) overlapW = cropW - 1;   // 防止切块步长<=0（分轴独立）
+    if (overlapH >= cropH) overlapH = cropH - 1;
+    int stepW = cropW - overlapW;                 // 相邻块起始间距 = 块边 - 重叠
+    int stepH = cropH - overlapH;
 
     // 考虑重叠的块数：最后一块只需从 (n-1)*step 开始且覆盖到图像末尾即可，
     // 避免因尾部重叠多算块。overlap=0 时退化为 ceil(边长/块边长)，与原公式一致。
-    int numW = std::max(1, (int)std::ceil((cols - (double)overlap) / stepW));
-    int numH = std::max(1, (int)std::ceil((rows - (double)overlap) / stepH));
+    int numW = std::max(1, (int)std::ceil((cols - (double)overlapW) / stepW));
+    int numH = std::max(1, (int)std::ceil((rows - (double)overlapH) / stepH));
 
     for (int y = 0; y < numH; y++) {
         for (int x = 0; x < numW; x++) {
@@ -175,6 +176,11 @@ std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropS
     }
 
     return setxywh;
+}
+
+// 兼容接口：两轴同重叠
+std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropSize, int overlap) {
+    return imgSplitWithOverlap(resImg, cropSize, overlap, overlap);
 }
 
 // 原接口：固定正方形切块、20% 重叠（最少 200px），与历史行为完全一致
@@ -351,12 +357,13 @@ std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
                                                cv::Size cropSize,
-                                               int overlap,
+                                               int overlapW,
+                                               int overlapH,
                                                float conf,
                                                int threads) {
     std::vector<std::vector<int>> tiles;
-    if (overlap >= 0)
-        tiles = imgSplitWithOverlap(img, cropSize, overlap);
+    if (overlapW >= 0 || overlapH >= 0)
+        tiles = imgSplitWithOverlap(img, cropSize, overlapW < 0 ? 0 : overlapW, overlapH < 0 ? 0 : overlapH);
     else
         tiles = imgSplit(img, cropSize.width);   // 自动重叠（20%，最少 200px）
     if (tiles.empty()) {
@@ -370,7 +377,7 @@ std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
         _layoutLogged = true;
         std::cout << "crop tiles: img " << img.cols << "x" << img.rows
                   << " -> tile " << cropSize.width << "x" << cropSize.height
-                  << ", overlap " << overlap << " -> " << tiles.size() << " tiles"
+                  << ", overlap " << overlapW << "x" << overlapH << " -> " << tiles.size() << " tiles"
                   << std::endl;
     }
 
@@ -413,4 +420,15 @@ std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
             hbboxFilter(perTile[i], merged, rc[0], rc[1], conf);
     }
     return merged;
+}
+
+// 兼容接口：两轴同重叠
+std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
+                                               const cv::Mat& img,
+                                               const std::string& task,
+                                               cv::Size cropSize,
+                                               int overlap,
+                                               float conf,
+                                               int threads) {
+    return tileDetectMultiThread(yolo, img, task, cropSize, overlap, overlap, conf, threads);
 }

@@ -157,7 +157,6 @@ private:
 	int _netHeight = 640;  // ONNX-net-input-height
 
 	bool _isDynamicShape = false;// onnx support dynamic shape
-	float _classThreshold = 0.6;
 	float _nmsThreshold = 0.6;
 	float _maskThreshold = 0.5;
 	int key_point_num = 17;  //_bodyKeyPoints.size(), shape[x, y, confidence]
@@ -196,6 +195,10 @@ private:
 public:
 
 	int _batchSize = 1;          // if multi-batch, set this
+	float _classThreshold = 0.6;   // 检测置信度阈值（外部可改，如 main --conf 0.3）
+	bool drawClass = true;         // 画图：标签显示类别名（默认开）
+	bool drawConf  = false;        // 画图：标签显示置信度（默认关）
+	bool drawId    = false;        // 画图：标签显示跟踪 id（默认关；仅跟踪时有值）
 	std::vector<std::string> _className;   // 类别名（来自 labelFile 或 <模型名>.txt，每行一个）
 	std::string labelFile;                 // 类别名 txt 路径；空 = <模型名>.txt，再缺省 class_0..N
 };

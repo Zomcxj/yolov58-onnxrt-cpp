@@ -8,6 +8,7 @@ test_*.log
 img_*.log
 video_*.mp4
 output/
+input/
 release/
 diag/
 3rdparty/
