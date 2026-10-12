@@ -35,7 +35,7 @@
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("YOLO Infer GUI");
-    resize(1180, 860);
+    resize(1280, 860);
 
     auto* central = new QWidget(this);
     auto* root = new QVBoxLayout(central);
@@ -572,28 +572,33 @@ void MainWindow::resizeEvent(QResizeEvent* e) {
     showImages();                                // 窗口变化 → 双栏预览自适应
 }
 
-// 在原图上叠画滑窗切块网格（与 CLI 切块一致：最后一块贴边）
+// 在原图上叠画滑窗切块网格（与 CLI 切块一致：最后一块贴边截短）；仅边框+左下角 r行c列 标签，不加蒙版
 void MainWindow::overlayTiles(QImage& im) const {
     if (!m_crop || !m_crop->isChecked() || im.isNull()) return;
     const int bw = m_cropW->value(), bh = m_cropH->value();
     const int W = im.width(), H = im.height();
     if (bw <= 0 || bh <= 0) return;
     QPainter p(&im);
-    QFont f = p.font(); f.setPointSize(10); p.setFont(f);
+    QFont f = p.font(); f.setPointSize(10); f.setBold(true); p.setFont(f);
     const int sx = qMax(1, bw - m_ovW->value()), sy = qMax(1, bh - m_ovH->value());
-    int idx = 0;
+    int idx = 0, row = 0;
     for (int y = 0;; y += sy) {
         const int ty = qMin(y, qMax(0, H - bh));
+        int col = 0;
         for (int x = 0;; x += sx) {
             const int tx = qMin(x, qMax(0, W - bw));
             const QRect r(tx, ty, qMin(bw, W), qMin(bh, H));
-            p.fillRect(r, QColor(0, 200, 255, 26));
-            p.setPen(QPen(QColor(0, 229, 255, 210), 2));
+            ++col; ++idx;
+            const QColor c = QColor::fromHsv((idx * 47) % 360, 210, 255, 235);   // 黄金角取色：相邻块色相错开
+            p.setPen(QPen(c, 2));
             p.drawRect(r);
-            p.setPen(QColor(255, 235, 59));
-            p.drawText(r.adjusted(6, 4, -6, -4), Qt::AlignTop | Qt::AlignLeft, QString::number(++idx));
+            const QRect  tr = r.adjusted(5, 0, -5, -3);
+            const QString tag = QString("r%1c%2").arg(row + 1).arg(col);
+            p.setPen(Qt::black); p.drawText(tr.translated(1, 1), Qt::AlignBottom | Qt::AlignLeft, tag);
+            p.setPen(Qt::white); p.drawText(tr,                   Qt::AlignBottom | Qt::AlignLeft, tag);
             if (tx + bw >= W) break;
         }
+        ++row;
         if (ty + bh >= H) break;
     }
 }
