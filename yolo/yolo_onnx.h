@@ -44,7 +44,6 @@ using namespace cv;
 using namespace cv::dnn;
 using namespace Ort;
 
-#define ORT_OLD_VISON 13  //ort1.12.0
 
 struct MaskParams {
 	int netWidth = 640;
@@ -64,7 +63,8 @@ struct PoseParams {
 	float kptThreshold = 0.5;
 	int kptRadius = 5;
 	bool isDrawKptLine = true;  // If True, the function will draw lines connecting keypoint for human pose.Default is True.
-	std::vector<std::vector<int>> skeleton = {
+	using Skeleton = std::vector<std::vector<int>>;   // 显式别名：避免 >> 收尾被误解析
+	Skeleton skeleton = {
 		{16, 14}, {14, 12}, {17, 15}, {15, 13}, {12, 13}, 
         {6, 12}, {7, 13}, {6, 7}, {6, 8}, {7, 9}, {8, 10}, {9, 11}, 
         {2, 3}, {1, 2}, {1, 3}, {2, 4}, {3, 5}, {4, 6}, {5, 7}};
@@ -170,11 +170,7 @@ private:
 	Ort::Session* _OrtSession = nullptr;
 	Ort::MemoryInfo _OrtMemoryInfo;
 
-#if ORT_API_VERSION < ORT_OLD_VISON
-    char* _inputName, * _output_name0, * _output_name1;
-#else
     std::shared_ptr<char> _inputName, _output_name0, _output_name1;
-#endif
 
 	std::vector<char*> _inputNodeNames; 
 	std::vector<char*> _outputNodeNames;

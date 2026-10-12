@@ -353,7 +353,7 @@ void hbboxFilter(std::vector<YolovOutput> result, std::vector<YolovOutput>& post
 // 多线程裁剪推理：切块 -> 线程池并行 OnnxDetect -> 按块顺序合并去重
 // 语义与原串行流程完全一致（每块独立检测，再依次与已有结果做 IoU 去重）
 // ----------------------------------------------------------------------------
-std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
+std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
                                                cv::Size cropSize,
@@ -423,12 +423,12 @@ std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
 }
 
 // 兼容接口：两轴同重叠
-std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
+std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
                                                cv::Size cropSize,
                                                int overlap,
                                                float conf,
                                                int threads) {
-    return tileDetectMultiThread(yolo, img, task, cropSize, overlap, overlap, conf, threads);
+    return OnnxDetectSlideMT(yolo, img, task, cropSize, overlap, overlap, conf, threads);
 }

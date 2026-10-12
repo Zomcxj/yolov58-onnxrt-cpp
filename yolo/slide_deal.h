@@ -20,7 +20,7 @@ std::vector<std::vector<int>> imgSplitWithOverlap(cv::Mat resImg, cv::Size cropS
 // task: "det" 用 hbboxFilter，"obb" 用 obboxFilter（其余任务请走原图推理）。
 // cropSize: cv::Size(宽,高) 切块尺寸；overlapW/H: >=0 指定各轴重叠像素，<0 用自动(20%且最少200px)。
 // threads<=0 时自动用 CPU 核数。返回合并后的检测结果（已映射回原图坐标）。
-std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
+std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
                                                cv::Size cropSize,
@@ -30,7 +30,7 @@ std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
                                                int threads);
 
 // 兼容接口：两轴同重叠
-std::vector<YolovOutput> tileDetectMultiThread(YolovOnnx& yolo,
+std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
                                                const cv::Mat& img,
                                                const std::string& task,
                                                cv::Size cropSize,

@@ -16,3 +16,6 @@ diag/
 /*.jpg
 /*.JPG
 .clangd
+tools/build-gui/
+tools/build-qt/
+tools/*.zip

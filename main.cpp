@@ -35,6 +35,9 @@ struct Options {
     bool   drawConf = false;  // 标签显示置信度（--draw-conf）
     bool   drawId = false;    // 标签显示跟踪 id（--draw-id，仅跟踪时有值）
     bool   exportFrames = false; // --export-frames：逐帧导出 图片+LabelMe json（便于调整误检）
+    bool   previewFrames = false;    // --preview-frames：视频模式逐帧写处理图（GUI 实时预览用）
+    std::string frameDir;            // --frame-dir：帧图输出目录（A/B 交替覆盖）
+    int    frameStep = 1;            // --frame-step：视频抽帧步长（1=每帧都推理）
     bool   isCuda = false;
     int    cudaID = 0;
 };
@@ -43,7 +46,7 @@ struct Options {
 static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
                       std::vector<YolovOutput>& result) {
     if (opt.crop && (opt.task == "det" || opt.task == "obb")) {
-        result = tileDetectMultiThread(yolo, img, opt.task, opt.cropSize,
+        result = OnnxDetectSlideMT(yolo, img, opt.task, opt.cropSize,
                                        opt.cropOverlapW, opt.cropOverlapH,
                                        opt.conf, opt.threads);
     } else {
@@ -123,6 +126,10 @@ static void printInfo(const Options& opt, const char* mode) {
 // ----------------------------------------------------------------------------
 // 测试：文件夹遍历推理（glob 图片/目录，逐张存结果图）
 // ----------------------------------------------------------------------------
+static void writeLabelMeJson(const std::string& jsonPath, const std::string& imageName,
+                             const cv::Mat& img, const std::vector<YolovOutput>& result,
+                             const YolovOnnx& yolo);   // 前置声明：图片模式 json 导出（定义在视频模式后）
+
 static int runImageMode(YolovOnnx& yolo, const Options& opt) {
     std::vector<std::string> files;
     try {
@@ -155,6 +162,16 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
             tracker.resultStructTransfer(result, objs);
             tracks.clear();
             tracker.doTrack(objs, tracks);
+        }
+
+        if (opt.exportFrames) {                // 图片模式 json：与原图同目录（原图不动，json 供 labelme 调整标注）
+            try {
+                const std::size_t slash = f.find_last_of("/\\");
+                const std::string dir = (slash == std::string::npos) ? "" : f.substr(0, slash + 1);
+                writeLabelMeJson(dir + pathStem(f) + ".json", pathBasename(f), img, result, yolo);
+            } catch (const cv::Exception& e) {
+                std::cerr << "[warn] export failed @" << f << ": " << e.what() << std::endl;
+            }
         }
 
         if (opt.draw && opt.task != "cls") {              // cls 无框可画；--no-draw 跳过
@@ -255,10 +272,14 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
         exportDir = savePath + pathStem(opt.input) + "/";
         cv::utils::fs::createDirectories(exportDir);
     }
+    std::vector<YolovOutput> lastDrawn;   // 抽帧间隔沿用上一帧结果（画面不闪空）
+    if (opt.previewFrames && !opt.frameDir.empty())   // GUI 实时帧目录
+        cv::utils::fs::createDirectories(opt.frameDir);
     while (cap.read(frame)) {
+        const bool process = (opt.frameStep <= 1) || (frameIdx % opt.frameStep == 0);   // 抽帧：步长内跳过推理
         Clock::time_point t0 = Clock::now();
         std::string expName;
-        if (opt.exportFrames) {
+        if (opt.exportFrames && process) {
             std::ostringstream nm;
             nm << pathStem(opt.input) << "_" << std::setw(6) << std::setfill('0') << frameIdx;
             expName = nm.str();
@@ -266,17 +287,20 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
             if (probe.good()) { ++frameIdx; continue; }   // 断点续跑：已导出帧跳过（不重复检测）
         }
         std::vector<YolovOutput> result;
-        detectOne(yolo, frame, opt, result);
-        double ms = elapsedMs(t0);
-
-        if (opt.track) {                       // 检测 -> 跟踪（直接用 MYTrack）
-            std::vector<Object> objs;
-            tracker.resultStructTransfer(result, objs);
-            tracks.clear();
-            tracker.doTrack(objs, tracks);
+        double ms = 0;
+        if (process) {
+            detectOne(yolo, frame, opt, result);
+            ms = elapsedMs(t0);
+            totalMs += ms;
+            if (opt.track) {                   // 检测 -> 跟踪（直接用 MYTrack）
+                std::vector<Object> objs;
+                tracker.resultStructTransfer(result, objs);
+                tracks.clear();
+                tracker.doTrack(objs, tracks);
+            }
         }
 
-        if (opt.exportFrames) {                // 导干净帧 + LabelMe json（在 DrawPred 之前，画的是原帧）
+        if (opt.exportFrames && process) {     // 导干净帧 + LabelMe json（在 DrawPred 之前，画的是原帧）
             try {
                 cv::imwrite(exportDir + expName + ".jpg", frame);
                 writeLabelMeJson(exportDir + expName + ".json", expName + ".jpg", frame, result, yolo);
@@ -285,9 +309,25 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
             }
         }
 
+        cv::Mat origFrame;                     // GUI 双流：原始帧（DrawPred 前克隆，左栏实时显示）
+        if (opt.previewFrames && !opt.frameDir.empty()) origFrame = frame.clone();
+
         if (opt.draw && opt.task != "cls") {
-            if (opt.track) MYTrack::tagTrackIds(tracks, result);
-            yolo.DrawPred(frame, result);
+            if (process) {
+                if (opt.track) MYTrack::tagTrackIds(tracks, result);
+                lastDrawn = result;            // 抽帧间隔用上一帧结果顶着
+            }
+            if (!lastDrawn.empty()) yolo.DrawPred(frame, lastDrawn);
+        }
+
+        std::string sfInfo;                    // GUI 实时预览：原始/处理 A/B 交替双流（左右两栏）
+        if (opt.previewFrames && !opt.frameDir.empty()) {
+            std::ostringstream no, np;
+            no << opt.frameDir << "/orig_" << (frameIdx % 2) << ".jpg";
+            np << opt.frameDir << "/proc_" << (frameIdx % 2) << ".jpg";
+            cv::imwrite(no.str(), origFrame.empty() ? frame : origFrame);
+            cv::imwrite(np.str(), frame);
+            sfInfo = "  so:" + no.str() + "  sf:" + np.str();
         }
 
         if (saveVideo) writer.write(frame);
@@ -296,16 +336,20 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
             int key = cv::waitKey(1);
             if (key == 'q' || key == 27) break;
         }
-        totalMs += ms;
         ++frameIdx;
-        std::cout << "frame " << frameIdx << "  [" << result.size() << " objs";
-        if (opt.track) std::cout << ", " << tracks.size() << " tracks";
-        std::cout << "]  " << (int)(ms + 0.5) << " ms" << std::endl;
-        if (opt.track) printTracks(tracks);
+        if (process) {
+            std::cout << "frame " << frameIdx << "  [" << result.size() << " objs";
+            if (opt.track) std::cout << ", " << tracks.size() << " tracks";
+            std::cout << "]  " << (int)(ms + 0.5) << " ms" << sfInfo << std::endl;
+            if (opt.track) printTracks(tracks);
+        } else {
+            std::cout << "frame " << frameIdx << "  (skip)" << sfInfo << std::endl;
+        }
     }
     std::cout << "done. " << frameIdx << " frame(s), avg "
               << (frameIdx ? (int)(totalMs / frameIdx + 0.5) : 0) << " ms/frame"
               << ", total " << totalMs / 1000.0 << " s";
+    if (opt.frameStep > 1) std::cout << " (抽帧 step=" << opt.frameStep << ")";
     if (saveVideo) std::cout << ", saved: " << videoOutPath;
     std::cout << std::endl;
     return 0;
@@ -327,6 +371,7 @@ static void printUsage(const char* prog) {
         "  --crop-size WxH   切块尺寸，默认 1280；支持 800x640（宽x高）或 1280（正方形）\n"
         "  --crop-overlap WxH   切块重叠像素：列x行分轴，如 60x240；单值 N = 两轴同值；默认自动(20%且≥200px)\n"
         "  --threads N        裁剪并行线程数，默认 = CPU 核数\n"
+        "  --export-frames   导出 LabelMe json：图片模式存原图同目录（原图不动）；视频模式逐帧原图+json 存 <save-dir>/<视频名>/\n"
         "  --conf F           置信度阈值（检测 NMS + 跨块合并 + 画框），默认 0.5\n"
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
         "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
@@ -339,6 +384,8 @@ static void printUsage(const char* prog) {
         "  --draw-id          标签显示跟踪 id（默认关；仅 --track 时有值）\n"
         "  --show             视频弹窗预览（默认 800x500 可拖拽缩放；按 q/ESC 退出）\n"
         "  --export-frames    逐帧导出 图片+LabelMe json 到 <save-dir>/<视频名>/（便于标注调整误检）\n"
+        "  --frame-step N     视频抽帧：每 N 帧推理一次，其余帧沿用上次结果（1=每帧，默认）\n"
+        "  --preview-frames   视频模式逐帧写处理图（配合 --frame-dir，GUI 实时预览用）\n"
         "  --cuda [--gpu N]   使用 GPU（需 CUDA 版 onnxruntime）\n"
         "  -h, --help         显示本帮助\n"
         "\n"
@@ -391,6 +438,9 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
             else if (a == "--draw-conf")    opt.drawConf = true;
             else if (a == "--draw-id")      opt.drawId = true;
             else if (a == "--export-frames") opt.exportFrames = true;
+            else if (a == "--preview-frames") opt.previewFrames = true;
+            else if (a == "--frame-dir")      opt.frameDir = need("--frame-dir");
+            else if (a == "--frame-step")     opt.frameStep = std::stoi(need("--frame-step"));
             else if (a == "--cuda")         opt.isCuda = true;
             else if (a == "--gpu")          opt.cudaID = std::stoi(need("--gpu"));
             else                            pos.push_back(a);

@@ -9,8 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(OpenCV REQUIRED)
 
 # ONNX Runtime / Eigen：换机器只需改这里的路径
+# ONNXRUNTIME_DIR 可在 cmake 命令行覆盖：-DONNXRUNTIME_DIR=D:/VsPro/CPP/onnxruntime-win-x64-gpu-1.14.0
+# CPU/GPU 包 ABI 相同，编译链接都不需要 CUDA SDK；但 GPU 包 dll 运行时硬依赖 cudnn/cublas/cudart/nvcuda（N 卡驱动）
 if(WIN32)
-    set(ONNXRUNTIME_DIR ${CMAKE_SOURCE_DIR}/../onnxruntime-win-x64-1.14.0)
+    set(ONNXRUNTIME_DIR ${CMAKE_SOURCE_DIR}/../onnxruntime-win-x64-1.14.0 CACHE PATH "ONNX Runtime 根目录（CPU/GPU 包均可）")
     set(ONNX_LIB ${ONNXRUNTIME_DIR}/lib/onnxruntime.dll)
 else()
     set(ONNXRUNTIME_DIR /home/cxj/onnxruntime-linux-x64-1.14.0)
@@ -31,6 +33,12 @@ add_executable(api_demo api_demo.cpp ${src1} ${src2})
 
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${ONNX_LIB} pthread)
 target_link_libraries(api_demo ${OpenCV_LIBS} ${ONNX_LIB} pthread)
+if(WIN32)
+    # 静态链接 gcc 运行时：CLI 不再依赖 libgcc/libstdc++ DLL（便于与 Qt 界面同目录部署）
+    target_link_options(${PROJECT_NAME} PRIVATE -static)
+    target_link_options(api_demo PRIVATE -static)
+endif()
+# Qt 图形界面见 tools/gui.pro（qmake + Qt 自带 mingw730_64 构建，勿用主编译器）
 
 # Linux 运行时免设 LD_LIBRARY_PATH
 if(NOT WIN32)
