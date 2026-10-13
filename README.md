@@ -38,6 +38,19 @@ GUI：双击 `tools\build_gui.cmd`（需 Qt 5.12 + mingw730_64 工具链），�
 yolov-onnxrt.exe model.onnx <图片/目录/视频> det [options]
 ```
 
-常用：`--conf` `--crop` `--export-frames` `--cuda`；完整见 `--help`。
+常用：`--conf` `--nms` `--crop` `--crop-size` `--crop-overlap` `--export-frames` `--cuda`；完整见 `--help`。
+
+关键参数默认值（CLI 与库层便捷重载一致）：
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `--conf` | 0.5 | 置信度阈值，检测 NMS / 跨块合并 / 画框三处贯通 |
+| `--nms` | 0.6 | NMS IoU 阈值，越小抑制越狠、保留框越少 |
+| `--crop-size` | 640 | 滑窗切块边长（默认正方形，支持 `800x640` 分轴） |
+| `--crop-overlap` | 160 | 切块重叠（默认两轴同值，支持 `60x240` 分轴；`-1` = 自动 20% 且 ≥200px） |
+| `--threads` | CPU 核数 | 切块并行推理线程数 |
+
+库层用法（`slide_deal.h`）：`OnnxDetectSlideMT(yolo, img, result[, cropSize, overlapW, overlapH, conf, threads])`，
+参数顺序与全参版一致（conf 在第 7 位，`-1` = 沿用 `yolo._classThreshold`）；阈值也可直接改 `yolo._classThreshold` / `yolo._nmsThreshold` 成员。
 
 ONNX Runtime 默认用 CPU 包（`-DONNXRUNTIME_DIR=` 可指向 GPU 包）；GPU 加速需 N 卡驱动 + CUDA 11.8 + cuDNN 8.x，缺任何一项自动回退 CPU。

@@ -18,6 +18,7 @@ struct GuiParams {
     QString input;                // 图片 / 文件夹 / 视频文件
     QString task = "det";         // det | obb | pose | seg | cls
     double  conf = 0.5;           // 置信度阈值
+    double  nms = 0.6;            // NMS IoU 阈值
     bool draw = true;             // 画框
     bool drawClass = true;        // 标签：类别名
     bool drawConf = false;        // 标签：置信度
@@ -77,6 +78,7 @@ private:
     class QComboBox* m_task = nullptr;
     // 推理参数
     class QDoubleSpinBox* m_conf = nullptr;
+    QDoubleSpinBox* m_nms = nullptr;
     class QCheckBox* m_draw = nullptr;
     class QCheckBox* m_drawClass = nullptr;
     class QCheckBox* m_drawConf = nullptr;

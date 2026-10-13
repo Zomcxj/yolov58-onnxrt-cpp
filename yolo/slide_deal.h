@@ -32,10 +32,10 @@ std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
 // 与 OnnxDetect 同形的便捷重载：不传的参数用默认值（task/阈值取自 yolo 成员、
 // 切块 640x640、重叠 160x160、CPU 核数），所有参数都可在调用点覆盖。
 inline bool OnnxDetectSlideMT(YolovOnnx& yolo, cv::Mat& img, std::vector<YolovOutput>& output,
-                              float conf = -1.f, cv::Size cropSize = cv::Size(640, 640),
-                              int overlapW = 160, int overlapH = 160, int threads = 0) {
-	const float c = conf < 0 ? yolo._classThreshold : conf;   // -1 = 沿用成员阈值
-	output = OnnxDetectSlideMT(yolo, img, yolo.GetTask(), cropSize, overlapW, overlapH, c, threads);
+                              cv::Size cropSize = cv::Size(640, 640),
+                              int overlapW = 160, int overlapH = 160,
+                              float conf = -1.f, int threads = 0) {
+	output = OnnxDetectSlideMT(yolo, img, yolo.GetTask(), cropSize, overlapW, overlapH, conf, threads);
 	return true;
 }
 

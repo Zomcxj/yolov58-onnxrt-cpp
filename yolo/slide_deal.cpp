@@ -361,6 +361,7 @@ std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
                                                int overlapH,
                                                float conf,
                                                int threads) {
+    if (conf < 0) conf = yolo._classThreshold;   // -1 = 沿用成员阈值（便捷重载透传时生效）
     std::vector<std::vector<int>> tiles;
     if (overlapW >= 0 || overlapH >= 0)
         tiles = imgSplitWithOverlap(img, cropSize, overlapW < 0 ? 0 : overlapW, overlapH < 0 ? 0 : overlapH);

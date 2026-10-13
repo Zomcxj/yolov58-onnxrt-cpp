@@ -23,7 +23,8 @@ struct Options {
     cv::Size cropSize{640, 640}; // 切块尺寸（宽×高）
     int    cropOverlapW = 160; // 列(x)重叠像素；-1 = 自动
     int    cropOverlapH = 160; // 行(y)重叠像素；-1 = 自动；0 = 无重叠
-    float  conf = 0.5f;      // 跨块合并置信度阈值
+    float  conf = 0.5f;      // 置信度阈值（检测 NMS + 跨块合并 + 画框）
+    float  nms = 0.6f;       // NMS IoU 阈值（越小抑制越狠，保留框越少）
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
     bool   track = false;    // --track：检测后接 ByteTrack 跟踪（cls 无框，已在 main 里关闭）
     std::string labels;      // --labels：类别名 txt；空 = <模型名>.txt
@@ -375,6 +376,7 @@ static void printUsage(const char* prog) {
         "  --threads N        裁剪并行线程数，默认 = CPU 核数\n"
         "  --export-frames   导出 LabelMe json：图片模式存原图同目录（原图不动）；视频模式逐帧原图+json 存 <save-dir>/<视频名>/\n"
         "  --conf F           置信度阈值（检测 NMS + 跨块合并 + 画框），默认 0.5\n"
+        "  --nms F            NMS IoU 阈值，默认 0.6；越小抑制越狠，保留框越少\n"
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
         "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
         "  --labels FILE     类别名 txt（每行一个；缺省 <模型名>.txt，再缺省 class_0..N）\n"
@@ -430,6 +432,7 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
             }
             else if (a == "--threads")      opt.threads = std::stoi(need("--threads"));
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));
+            else if (a == "--nms")          opt.nms  = std::stof(need("--nms"));
             else if (a == "--track")        opt.track = true;
             else if (a == "--labels")       opt.labels = need("--labels");
             else if (a == "--save-dir")     opt.savePath = need("--save-dir");
@@ -488,6 +491,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     yolo._classThreshold = opt.conf;   // 置信度贯通：模型 NMS / 跨块合并 / 画框一致
+    yolo._nmsThreshold = opt.nms;      // NMS 阈值贯通（模型内 NMS）
     yolo.drawClass = opt.drawClass;    // 标签内容开关
     yolo.drawConf  = opt.drawConf;
     yolo.drawId    = opt.drawId;

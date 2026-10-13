@@ -29,7 +29,8 @@ $BIN <cls模型> <img.jpg> cls --track               # → [warn] task 'cls' has
 $BIN <model.onnx> <img.jpg> detx                   # → cannot load model
 
 # ========== 3. 滑窗切块（仅 det/obb）==========
-$BIN <model.onnx> <video.mp4> det --crop                                              # 默认1280 + 自动重叠 → 打印 crop tiles: img WxH -> tile 1280x1280, overlap NxN -> K tiles
+$BIN <model.onnx> <video.mp4> det --crop                                              # 默认640 + 重叠160x160 → 打印 crop tiles: img WxH -> tile 640x640, overlap 160x160 -> K tiles
+$BIN <model.onnx> <video.mp4> det --crop --crop-overlap -1                            # -1=自动重叠(20%且>=200px)，覆盖默认160
 $BIN <model.onnx> <video.mp4> det --crop --crop-size 480x480                          # 分块尺寸
 $BIN <model.onnx> <video.mp4> det --crop --crop-size 640                              # 正方形简写
 $BIN <model.onnx> <video.mp4> det --crop --crop-size 480x480 --crop-overlap 60x240    # 分轴重叠 → overlap 60x240
@@ -41,10 +42,14 @@ $BIN <model.onnx> <video.mp4> det --crop --threads 1                            
 $BIN <model.onnx> <video.mp4> det --crop --threads 4                                  # 并行，ms/帧下降
 $BIN <model.onnx> <video.mp4> det --crop --threads 0                                  # 0=CPU核数
 
-# ========== 4. 置信度（贯通 NMS/跨块合并/画框）==========
+# ========== 4. 置信度 / NMS（均贯通：模型 NMS + 跨块合并 + 画框）==========
 $BIN <model.onnx> <img.jpg> det --conf 0.3          # 弱检出也画
 $BIN <model.onnx> <img.jpg> det --conf 0.8          # 只留高置信
-$BIN <model.onnx> <img.jpg> det                     # 默认 0.5
+$BIN <model.onnx> <img.jpg> det                     # conf 默认 0.5
+$BIN <model.onnx> <img.jpg> det --nms 0.45          # NMS IoU 阈值（越小抑制越狠，保留框越少）
+$BIN <model.onnx> <img.jpg> det --nms 0.9           # 几乎不去重（重叠目标如人群保留更多框）
+$BIN <model.onnx> <img.jpg> det                     # nms 默认 0.6
+$BIN <model.onnx> <img.jpg> det --conf 0.3 --nms 0.45 --track --draw-conf --draw-id   # 组合
 
 # ========== 5. 跟踪 ==========
 $BIN <model.onnx> <video.mp4> det --track           # frame N [..., M tracks] + 每轨一行
@@ -87,7 +92,7 @@ python compose.py output/<视频名> output/<视频名>_composed.mp4 <原视频f
 # GPU 包但横幅回 CPU → export LD_LIBRARY_PATH=/path/to/onnxruntime-gpu/lib:$LD_LIBRARY_PATH
 
 # ========== 11. api_demo（对接示例）==========
-$API <model.onnx> <img.jpg> det                         # 单图原图推理 → N objs, M tracks
+$API <model.onnx> <img.jpg> det                         # 单图原图推理 → N objs, M tracks（滑窗重载默认: 640x640, 重叠160x160, conf=-1=沿用 _classThreshold）
 $API <model.onnx> <img.jpg> det <labels.txt>            # 第4参=类别txt（不传走 <模型名>.txt 约定）
 $API <model.onnx> <img.jpg>                             # 参数不足 → usage，退出码 -1
 

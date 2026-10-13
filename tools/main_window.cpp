@@ -63,6 +63,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_conf = new QDoubleSpinBox(gbInf);
     m_conf->setRange(0.05, 0.95); m_conf->setSingleStep(0.05); m_conf->setValue(0.5);
     m_conf->setToolTip("置信度阈值：模型 NMS + 跨块合并 + 画框 三处贯通");
+    m_nms = new QDoubleSpinBox(gbInf);
+    m_nms->setRange(0.1, 0.95); m_nms->setSingleStep(0.05); m_nms->setValue(0.6);
+    m_nms->setToolTip("NMS IoU 阈值：越小抑制越狠，保留框越少");
     m_draw      = new QCheckBox("画框", gbInf);       m_draw->setChecked(true);
     m_drawClass = new QCheckBox("类别名", gbInf);     m_drawClass->setChecked(true);
     m_drawConf  = new QCheckBox("置信度", gbInf);     m_drawConf->setToolTip("框上显示置信度");
@@ -104,6 +107,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     row0->addWidget(new QLabel("置信度:", gbInf));
     row0->addWidget(m_conf);
     row0->addSpacing(14);
+    row0->addWidget(new QLabel("NMS:", gbInf));
+    row0->addWidget(m_nms);
+    row0->addSpacing(14);
     row0->addWidget(m_draw);      row0->addWidget(m_drawClass);
     row0->addWidget(m_drawConf);  row0->addWidget(m_drawId);
     row0->addWidget(m_track);
@@ -139,7 +145,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // 输入框统一宽度（块/重叠/线程/抽帧/GPU编号）
     for (QSpinBox* s : {m_cropW, m_cropH, m_ovW, m_ovH, m_threads, m_frameStep, m_cudaId})
         s->setFixedWidth(72);
-    m_conf->setFixedWidth(90);
+    for (QDoubleSpinBox* s : {m_conf, m_nms})
+        s->setFixedWidth(90);
     root->addWidget(gbInf);
 
     // ---------- 输入 / 控制 ----------
@@ -304,6 +311,7 @@ QStringList MainWindow::buildArgs(const GuiParams& p) const {
     QStringList a;
     a << p.modelPath << p.input << p.task;
     a << "--conf" << QString::number(p.conf, 'f', 2);
+    a << "--nms"  << QString::number(p.nms,  'f', 2);
     if (!p.draw)      a << "--no-draw";
     if (!p.drawClass) a << "--no-class";
     if (p.drawConf)   a << "--draw-conf";
@@ -338,6 +346,7 @@ GuiParams MainWindow::collect() {
     p.input      = QDir::toNativeSeparators(m_input->text().trimmed());
     p.task       = m_task->currentText();
     p.conf       = m_conf->value();
+    p.nms        = m_nms->value();
     p.draw = m_draw->isChecked();         p.drawClass = m_drawClass->isChecked();
     p.drawConf = m_drawConf->isChecked(); p.drawId = m_drawId->isChecked();
     p.track = m_track->isChecked();

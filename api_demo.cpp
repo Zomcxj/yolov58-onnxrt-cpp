@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
 
     // ②滑窗推理（小目标增强）：全参显式调用
     std::vector<YolovOutput> slideResult;
-    OnnxDetectSlideMT(yolo, img, slideResult, 0.3f, cv::Size(640, 640), 200, 200, 4);
+    OnnxDetectSlideMT(yolo, img, slideResult, cv::Size(640, 640), 200, 200, 0.3f, 4);
     std::cout << "slide: " << slideResult.size() << " objs" << std::endl;
 
     // 跟踪
