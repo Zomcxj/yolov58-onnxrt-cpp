@@ -421,14 +421,3 @@ std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
     }
     return merged;
 }
-
-// 兼容接口：两轴同重叠
-std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
-                                               const cv::Mat& img,
-                                               const std::string& task,
-                                               cv::Size cropSize,
-                                               int overlap,
-                                               float conf,
-                                               int threads) {
-    return OnnxDetectSlideMT(yolo, img, task, cropSize, overlap, overlap, conf, threads);
-}

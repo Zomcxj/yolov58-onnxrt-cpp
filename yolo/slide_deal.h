@@ -29,14 +29,15 @@ std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
                                                float conf,
                                                int threads);
 
-// 兼容接口：两轴同重叠
-std::vector<YolovOutput> OnnxDetectSlideMT(YolovOnnx& yolo,
-                                               const cv::Mat& img,
-                                               const std::string& task,
-                                               cv::Size cropSize,
-                                               int overlap,
-                                               float conf,
-                                               int threads);
+// 与 OnnxDetect 同形的便捷重载：不传的参数用默认值（task/阈值取自 yolo 成员、
+// 切块 640x640、重叠 160x160、CPU 核数），所有参数都可在调用点覆盖。
+inline bool OnnxDetectSlideMT(YolovOnnx& yolo, cv::Mat& img, std::vector<YolovOutput>& output,
+                              float conf = -1.f, cv::Size cropSize = cv::Size(640, 640),
+                              int overlapW = 160, int overlapH = 160, int threads = 0) {
+	const float c = conf < 0 ? yolo._classThreshold : conf;   // -1 = 沿用成员阈值
+	output = OnnxDetectSlideMT(yolo, img, yolo.GetTask(), cropSize, overlapW, overlapH, c, threads);
+	return true;
+}
 
 void obboxFilter(std::vector<YolovOutput> result, std::vector<YolovOutput>& postResult, int lx, int ly, float conf);
 

@@ -283,13 +283,7 @@ vector<STrack> BYTETracker::update(const vector<Object>& objects)
 		this->lost_stracks.push_back(lost_stracks[i]);
 	}
 
-    // struct timeval t1, t2;
-    // gettimeofday(&t1,NULL);
 	this->lost_stracks = sub_stracks(this->lost_stracks, this->removed_stracks);
-    // gettimeofday(&t2,NULL);
-	// int time = (t2.tv_sec - t1.tv_sec) * 1000000 + (int)(t2.tv_usec - t1.tv_usec);
-    // std::cout << "track time: "<< time << " us" << std::endl;
-
 	this->removed_stracks.clear();
 	for (int i = 0; i < removed_stracks.size(); i++)
 	{

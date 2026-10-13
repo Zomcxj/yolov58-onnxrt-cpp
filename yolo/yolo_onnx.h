@@ -36,6 +36,8 @@
 #include <fstream>  
 #include <opencv2/opencv.hpp>
 #include <onnxruntime_c_api.h>
+
+struct Object;                           // BYTETracker.h 定义；DrawPredTrack 仅用引用，前置声明即可
 #include <onnxruntime_cxx_api.h>
 #include <sys/time.h>
 
@@ -127,6 +129,13 @@ public:
     *   \param[out] isobb: rotated bbox
 	*/
 	bool OnnxDetect(cv::Mat& srcImg, std::vector<YolovOutput>& output);
+
+	const std::string& GetTask() const { return task; }   // 供滑窗同形重载读取任务类型
+
+	/** \brief  跟踪结果画图：直接画轨迹框（id/坐标/类别/置信度都在 Object 里，无需写回检测结构）
+	*   风格与 DrawPred 一致（同色号/字号/标签开关），仅 det 跟踪场景使用
+	*/
+	void DrawPredTrack(cv::Mat& img, const std::vector<Object>& tracks);
 
 	/** \brief  detect, batch size= _batchSize
 	*   \param[in] srcImg:A batch of images.

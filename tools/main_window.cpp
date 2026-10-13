@@ -71,10 +71,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_track     = new QCheckBox("目标跟踪", gbInf);
     connect(m_track, &QCheckBox::toggled, m_drawId, &QCheckBox::setEnabled);
     m_crop = new QCheckBox("滑窗切块", gbInf);
-    m_cropW = new QSpinBox(gbInf);  m_cropW->setRange(64, 4096);  m_cropW->setSingleStep(32); m_cropW->setValue(480);
-    m_cropH = new QSpinBox(gbInf);  m_cropH->setRange(64, 4096);  m_cropH->setSingleStep(32); m_cropH->setValue(480);
-    m_ovW   = new QSpinBox(gbInf);  m_ovW->setRange(0, 2048);     m_ovW->setValue(256);
-    m_ovH   = new QSpinBox(gbInf);  m_ovH->setRange(0, 2048);     m_ovH->setValue(96);
+    m_cropW = new QSpinBox(gbInf);  m_cropW->setRange(64, 4096);  m_cropW->setSingleStep(32); m_cropW->setValue(640);
+    m_cropH = new QSpinBox(gbInf);  m_cropH->setRange(64, 4096);  m_cropH->setSingleStep(32); m_cropH->setValue(640);
+    m_ovW   = new QSpinBox(gbInf);  m_ovW->setRange(0, 2048);     m_ovW->setValue(160);
+    m_ovH   = new QSpinBox(gbInf);  m_ovH->setRange(0, 2048);     m_ovH->setValue(160);
     m_threads = new QSpinBox(gbInf); m_threads->setRange(0, 64);  m_threads->setValue(4);
     m_threads->setToolTip("0 = CPU 核数");
     m_frameStep = new QSpinBox(gbInf); m_frameStep->setRange(1, 60); m_frameStep->setValue(1);

@@ -1,21 +1,22 @@
 #include "yolo_onnx.h"
+#include "BYTETracker.h"                // DrawPredTrack：Object（rect/label/prob/track_id）
 
 // 辅助函数：将 const char* 转换为 const wchar_t*
 inline const wchar_t* char_to_wchar(const char* str) {
-    size_t len = strlen(str) + 1;
-    wchar_t* wstr = new wchar_t[len];
-    mbstowcs(wstr, str, len);
-    return wstr;
+	size_t len = strlen(str) + 1;
+	wchar_t* wstr = new wchar_t[len];
+	mbstowcs(wstr, str, len);
+	return wstr;
 }
 
 // 辅助函数：释放 wchar_t* 内存
 inline void free_wchar(const wchar_t* wstr) {
-    delete[] wstr;
+	delete[] wstr;
 }
 
 bool YolovOnnx::ReadLines(const std::string& label_file)
 {
-    std::ifstream ifs(label_file);
+	std::ifstream ifs(label_file);
 	std::string line;
 	_className.clear();
 
@@ -23,42 +24,42 @@ bool YolovOnnx::ReadLines(const std::string& label_file)
 		if (!line.empty() && line.back() == '\r') line.pop_back();   // 兼容 CRLF
 		if (!line.empty()) _className.push_back(line);
 	}
-    std::cout << "load " << label_file << " success !" << std::endl;      	
-    return true;
+	std::cout << "load " << label_file << " success !" << std::endl;      	
+	return true;
 }
 
 // 类别名配置路径优先级：labelFile（--labels / 代码直接赋值）> <模型目录>/<模型名>.txt > class_0..N
 bool YolovOnnx::LoadClassNames(const std::string& modelPath) {
-    std::string label_file = labelFile;
-    bool explicit_file = !label_file.empty();
-    if (!explicit_file) {
-        size_t slash = modelPath.find_last_of("/\\");
-        std::string dir = (slash == std::string::npos) ? "" : modelPath.substr(0, slash + 1);
-        std::string name = (slash == std::string::npos) ? modelPath : modelPath.substr(slash + 1);
-        size_t dot = name.find_last_of('.');
-        std::string stem = (dot == std::string::npos) ? name : name.substr(0, dot);
-        label_file = dir + stem + ".txt";
-    }
+	std::string label_file = labelFile;
+	bool explicit_file = !label_file.empty();
+	if (!explicit_file) {
+		size_t slash = modelPath.find_last_of("/\\");
+		std::string dir = (slash == std::string::npos) ? "" : modelPath.substr(0, slash + 1);
+		std::string name = (slash == std::string::npos) ? modelPath : modelPath.substr(slash + 1);
+		size_t dot = name.find_last_of('.');
+		std::string stem = (dot == std::string::npos) ? name : name.substr(0, dot);
+		label_file = dir + stem + ".txt";
+	}
 
-    std::ifstream ifs(label_file);
-    if (!ifs.good()) {
-        if (explicit_file) {
-		std::cout << "label file not found: " << label_file << std::endl;
-		return false;
-        }
-        _className.clear();
-        for (int i = 0; i < class_num; ++i)
+	std::ifstream ifs(label_file);
+	if (!ifs.good()) {
+		if (explicit_file) {
+			std::cout << "label file not found: " << label_file << std::endl;
+			return false;
+		}
+		_className.clear();
+		for (int i = 0; i < class_num; ++i)
 		_className.push_back("class_" + std::to_string(i));
-        std::cout << "no label file, fallback to class_0.." << std::endl;
-        return true;
-    }
+		std::cout << "no label file, fallback to class_0.." << std::endl;
+		return true;
+	}
 
-    if (!ReadLines(label_file)) return false;
-    if ((int)_className.size() != class_num) {
-        std::cout << "label_num (" << _className.size() << ") != class_num (" << class_num << ")!" << std::endl;
-        return false;
-    }
-    return true;
+	if (!ReadLines(label_file)) return false;
+	if ((int)_className.size() != class_num) {
+		std::cout << "label_num (" << _className.size() << ") != class_num (" << class_num << ")!" << std::endl;
+		return false;
+	}
+	return true;
 }
 
 
@@ -95,7 +96,7 @@ void YolovOnnx::LetterBox(const cv::Mat& img, cv::Mat& outImage, cv::Vec4d& para
 }
 
 bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool isCuda, int cudaID, bool warmUp) {
-    this->task = task;
+	this->task = task;
 	if (_batchSize < 1) _batchSize = 1;
 	try
 	{
@@ -128,13 +129,13 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
 		_OrtSessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 		// _OrtSession = new Ort::Session(_OrtEnv, modelPath.c_str(), _OrtSessionOptions);
 
-        // Windows 下 ORTCHAR_T 为 wchar_t，Linux 下为 char
+		// Windows 下 ORTCHAR_T 为 wchar_t，Linux 下为 char
 #ifdef _WIN32
-        const wchar_t* w_model_path = char_to_wchar(modelPath.c_str());
-        _OrtSession = new Ort::Session(_OrtEnv, w_model_path, _OrtSessionOptions);
-        free_wchar(w_model_path);
+		const wchar_t* w_model_path = char_to_wchar(modelPath.c_str());
+		_OrtSession = new Ort::Session(_OrtEnv, w_model_path, _OrtSessionOptions);
+		free_wchar(w_model_path);
 #else
-        _OrtSession = new Ort::Session(_OrtEnv, modelPath.c_str(), _OrtSessionOptions);
+		_OrtSession = new Ort::Session(_OrtEnv, modelPath.c_str(), _OrtSessionOptions);
 #endif
 
 		Ort::AllocatorWithDefaultOptions allocator;
@@ -161,12 +162,12 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
 			_inputTensorShape[2] = _netHeight;
 			_inputTensorShape[3] = _netWidth;
 		}
-        _netHeight = _inputTensorShape[2];
+		_netHeight = _inputTensorShape[2];
 		_netWidth = _inputTensorShape[3];
 		//init output
 		_outputNodesNum = _OrtSession->GetOutputCount();
 
-        if (task == "seg") {
+		if (task == "seg") {
 			_output_name0 = std::move(_OrtSession->GetOutputNameAllocated(0, allocator));
 			_output_name1 = std::move(_OrtSession->GetOutputNameAllocated(1, allocator));
 			Ort::TypeInfo type_info_output0(nullptr);
@@ -174,69 +175,69 @@ bool YolovOnnx::ReadModel(const std::string& modelPath, std::string task, bool i
 			bool flag = false;
 			flag = strcmp(_output_name0.get(), _output_name1.get()) < 0;
 
-		if (flag)  //make sure "output0" is in front of  "output1"
-		{
-			type_info_output0 = _OrtSession->GetOutputTypeInfo(0);  //output0
-			type_info_output1 = _OrtSession->GetOutputTypeInfo(1);  //output1
-			_outputNodeNames.push_back(_output_name0.get());
-			_outputNodeNames.push_back(_output_name1.get());
+			if (flag)  //make sure "output0" is in front of  "output1"
+			{
+				type_info_output0 = _OrtSession->GetOutputTypeInfo(0);  //output0
+				type_info_output1 = _OrtSession->GetOutputTypeInfo(1);  //output1
+				_outputNodeNames.push_back(_output_name0.get());
+				_outputNodeNames.push_back(_output_name1.get());
+			}
+			else {
+				type_info_output0 = _OrtSession->GetOutputTypeInfo(1);  //output0
+				type_info_output1 = _OrtSession->GetOutputTypeInfo(0);  //output1
+				_outputNodeNames.push_back(_output_name1.get());
+				_outputNodeNames.push_back(_output_name0.get());
+			}
+
+			auto tensor_info_output0 = type_info_output0.GetTensorTypeAndShapeInfo();
+			_outputNodeDataType = tensor_info_output0.GetElementType();
+			_outputTensorShape = tensor_info_output0.GetShape();
+			auto tensor_info_output1 = type_info_output1.GetTensorTypeAndShapeInfo();
+			std::vector<int64_t> mask_shape = tensor_info_output1.GetShape();
+			{   // seg: output0 通道 = 4+nc+maskC（v8）/ 5+nc+maskC（v5）
+				bool v8seg = _outputTensorShape[1] < _outputTensorShape[2];
+				int dims = v8seg ? (int)_outputTensorShape[1] : (int)_outputTensorShape[2];
+				this->class_num = dims - (v8seg ? 4 : 5) - (int)mask_shape[1];
+			}
+		}        
+		else if (task == "cls") {
+			if (_outputNodesNum != 1) {
+				std::cout << "Classification model should have 1 output node." << std::endl;
+				return false;
+			}
+				_output_name0 = std::move(_OrtSession->GetOutputNameAllocated(0, allocator));
+				_outputNodeNames.push_back(_output_name0.get());
+
+			Ort::TypeInfo type_info_output0 = _OrtSession->GetOutputTypeInfo(0);
+			auto tensor_info_output0 = type_info_output0.GetTensorTypeAndShapeInfo();
+			_outputNodeDataType = tensor_info_output0.GetElementType();
+			_outputTensorShape = tensor_info_output0.GetShape();
+
+			// 假设分类任务的输出维度为 [batch_size, num_classes]
+			if (_outputTensorShape.size() < 2) {
+				std::cout << "Invalid classification model output shape." << std::endl;
+				return false;
+			}
+			this->class_num = _outputTensorShape.back();  // 获取类别数
+			if (class_num <= 1) {
+				std::cout << "Classification model requires at least 2 classes." << std::endl;
+				return false;
+			}
+			if (!LoadClassNames(modelPath)) return false;
+			return true;
 		}
 		else {
-			type_info_output0 = _OrtSession->GetOutputTypeInfo(1);  //output0
-			type_info_output1 = _OrtSession->GetOutputTypeInfo(0);  //output1
-			_outputNodeNames.push_back(_output_name1.get());
-			_outputNodeNames.push_back(_output_name0.get());
-		}
-
-		auto tensor_info_output0 = type_info_output0.GetTensorTypeAndShapeInfo();
-		_outputNodeDataType = tensor_info_output0.GetElementType();
-		_outputTensorShape = tensor_info_output0.GetShape();
-		auto tensor_info_output1 = type_info_output1.GetTensorTypeAndShapeInfo();
-		std::vector<int64_t> mask_shape = tensor_info_output1.GetShape();
-		{   // seg: output0 通道 = 4+nc+maskC（v8）/ 5+nc+maskC（v5）
-			bool v8seg = _outputTensorShape[1] < _outputTensorShape[2];
-			int dims = v8seg ? (int)_outputTensorShape[1] : (int)_outputTensorShape[2];
-			this->class_num = dims - (v8seg ? 4 : 5) - (int)mask_shape[1];
-		}
-        }        
-        else if (task == "cls") {
-		if (_outputNodesNum != 1) {
-			std::cout << "Classification model should have 1 output node." << std::endl;
-			return false;
-		}
-			_output_name0 = std::move(_OrtSession->GetOutputNameAllocated(0, allocator));
-			_outputNodeNames.push_back(_output_name0.get());
-
-		Ort::TypeInfo type_info_output0 = _OrtSession->GetOutputTypeInfo(0);
-		auto tensor_info_output0 = type_info_output0.GetTensorTypeAndShapeInfo();
-		_outputNodeDataType = tensor_info_output0.GetElementType();
-		_outputTensorShape = tensor_info_output0.GetShape();
-
-		// 假设分类任务的输出维度为 [batch_size, num_classes]
-		if (_outputTensorShape.size() < 2) {
-			std::cout << "Invalid classification model output shape." << std::endl;
-			return false;
-		}
-		this->class_num = _outputTensorShape.back();  // 获取类别数
-		if (class_num <= 1) {
-			std::cout << "Classification model requires at least 2 classes." << std::endl;
-			return false;
-		}
-		if (!LoadClassNames(modelPath)) return false;
-		return true;
-        }
-        else {
 
 			_output_name0 = std::move(_OrtSession->GetOutputNameAllocated(0, allocator));
 			_outputNodeNames.push_back(_output_name0.get());
 
-		Ort::TypeInfo type_info_output0(nullptr);
-		type_info_output0 = _OrtSession->GetOutputTypeInfo(0);  //output0
+			Ort::TypeInfo type_info_output0(nullptr);
+			type_info_output0 = _OrtSession->GetOutputTypeInfo(0);  //output0
 
-		auto tensor_info_output0 = type_info_output0.GetTensorTypeAndShapeInfo();
-		_outputNodeDataType = tensor_info_output0.GetElementType();
-		_outputTensorShape = tensor_info_output0.GetShape();
-        }
+			auto tensor_info_output0 = type_info_output0.GetTensorTypeAndShapeInfo();
+			_outputNodeDataType = tensor_info_output0.GetElementType();
+			_outputTensorShape = tensor_info_output0.GetShape();
+		}
 
 		// 类别数：det/obb/pose 由输出形状推导（与 OnnxBatchDetect 运行期推导一致）
 		if (task != "cls" && task != "seg") {
@@ -318,7 +319,7 @@ bool YolovOnnx::OnnxDetect(cv::Mat& srcImg, std::vector<YolovOutput>& output) {
 		return true;
 	}
 	else 
-        return false;
+		return false;
 }
 
 
@@ -338,7 +339,7 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 	input_tensors.push_back(Ort::Value::CreateTensor<float>(_OrtMemoryInfo, (float*)blob.data, input_tensor_length, 
 			            _inputTensorShape.data(), _inputTensorShape.size()));
 
-    // infer
+	// infer
 	output_tensors = _OrtSession->Run(Ort::RunOptions{nullptr}, _inputNodeNames.data(), input_tensors.data(),
 		                                _inputNodeNames.size(), _outputNodeNames.data(), _outputNodeNames.size());
 
@@ -352,278 +353,278 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 	int class_num = this->class_num;   // 局部副本
 	int64_t one_output_length = VectorProduct(outputTensorShape) / outputTensorShape[0];    // outputTensorShape[0] = _batchSize
 
-    // cls
-    if (task == "cls") {
-        if (outputTensorShape.size() < 2) {
-		std::cerr << "Classification model must have at least 2D output shape (batch_size, num_classes)" << std::endl;
-		return false;
-        }
-
-        int batchSize = outputTensorShape[0];
-        // int classCount = _outputTensorShape[1]; // class_num
-        if (batchSize != srcImgs.size()) {
-		std::cerr << "Batch size mismatch between input images (" << srcImgs.size()
-			      << ") and model output (" << batchSize << ")" << std::endl;
-		return false;
-        }
-
-        for (int img_idx = 0; img_idx < batchSize; ++img_idx) {
-		std::vector<YolovOutput> temp_output;
-		const float* img_scores = data + img_idx * class_num;
-		// Softmax归一化
-		std::vector<float> scores(class_num);
-		float sum_exp = 0.0f;
-		for (int c = 0; c < class_num; ++c) {
-			scores[c] = std::exp(img_scores[c]);
-			sum_exp += scores[c];
+	// cls
+	if (task == "cls") {
+		if (outputTensorShape.size() < 2) {
+			std::cerr << "Classification model must have at least 2D output shape (batch_size, num_classes)" << std::endl;
+			return false;
 		}
-		for (int c = 0; c < class_num; ++c) {
-			scores[c] /= sum_exp;
-		}
-		cv::Mat normalized_scores_mat(1, class_num, CV_32FC1, scores.data());
-		// 获取最高置信度类别
-		double maxVal;
-		cv::Point maxLoc;
-		cv::minMaxLoc(normalized_scores_mat, nullptr, &maxVal, nullptr, &maxLoc);
-		std::cout << _className[maxLoc.x] << " " << static_cast<float>(maxVal) << std::endl;
 
-		YolovOutput result;
-		result.id = maxLoc.x;
-		result.confidence = static_cast<float>(maxVal);
-		temp_output.push_back(result);
-		output.push_back(temp_output);
-        }
-        if (output.size())
-		return true;
-        else
-		return false;
-    }
-    
-    // v5
+		int batchSize = outputTensorShape[0];
+		// int classCount = _outputTensorShape[1]; // class_num
+		if (batchSize != srcImgs.size()) {
+			std::cerr << "Batch size mismatch between input images (" << srcImgs.size()
+					<< ") and model output (" << batchSize << ")" << std::endl;
+			return false;
+		}
+
+		for (int img_idx = 0; img_idx < batchSize; ++img_idx) {
+			std::vector<YolovOutput> temp_output;
+			const float* img_scores = data + img_idx * class_num;
+			// Softmax归一化
+			std::vector<float> scores(class_num);
+			float sum_exp = 0.0f;
+			for (int c = 0; c < class_num; ++c) {
+				scores[c] = std::exp(img_scores[c]);
+				sum_exp += scores[c];
+			}
+			for (int c = 0; c < class_num; ++c) {
+				scores[c] /= sum_exp;
+			}
+			cv::Mat normalized_scores_mat(1, class_num, CV_32FC1, scores.data());
+			// 获取最高置信度类别
+			double maxVal;
+			cv::Point maxLoc;
+			cv::minMaxLoc(normalized_scores_mat, nullptr, &maxVal, nullptr, &maxLoc);
+			std::cout << _className[maxLoc.x] << " " << static_cast<float>(maxVal) << std::endl;
+
+			YolovOutput result;
+			result.id = maxLoc.x;
+			result.confidence = static_cast<float>(maxVal);
+			temp_output.push_back(result);
+			output.push_back(temp_output);
+		}
+		if (output.size())
+			return true;
+		else
+			return false;
+	}
+	
+	// v5
 	int rows = outputTensorShape[1];
-    int dimensions = outputTensorShape[2];
+	int dimensions = outputTensorShape[2];
 	cv::Mat output0 = cv::Mat(cv::Size(rows, dimensions), CV_32F, data);
-    
-    if (this->task == "det")
-        class_num = dimensions - 5;
-    else if (this->task == "obb") {
-        class_num = dimensions - 5 - 180;
+	
+	if (this->task == "det")
+		class_num = dimensions - 5;
+	else if (this->task == "obb") {
+		class_num = dimensions - 5 - 180;
 		output0.release();
 		output0 = cv::Mat(cv::Size(dimensions, rows), CV_32F, data);
 	}
-    else if (this->task == "seg") 
-    {
-        outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
-        maskProtosShape = {1, (int)outputMaskTensorShape[1], (int)outputMaskTensorShape[2], (int)outputMaskTensorShape[3]};
-        maskProtosLength = VectorProduct(maskProtosShape); 
-        class_num = dimensions - 5 - (int)outputMaskTensorShape[1];
-    }
+	else if (this->task == "seg") 
+	{
+		outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+		maskProtosShape = {1, (int)outputMaskTensorShape[1], (int)outputMaskTensorShape[2], (int)outputMaskTensorShape[3]};
+		maskProtosLength = VectorProduct(maskProtosShape); 
+		class_num = dimensions - 5 - (int)outputMaskTensorShape[1];
+	}
 
 	data = (float *)output0.data;
 
-    // v8
-    bool yolov8 = false;
-    if (rows < dimensions)
-    {
-        yolov8 = true;
-        rows = outputTensorShape[2];
-        dimensions = outputTensorShape[1];
+	// v8
+	bool yolov8 = false;
+	if (rows < dimensions)
+	{
+		yolov8 = true;
+		rows = outputTensorShape[2];
+		dimensions = outputTensorShape[1];
 		output0.release();
-        output0 = cv::Mat(cv::Size(rows, dimensions), CV_32F, data).t();  //[bs,84,8400]=>[bs,8400,84]
-        // std::cout << output0.rows << " " << output0.cols << " " << output0.size() << std::endl;
+		output0 = cv::Mat(cv::Size(rows, dimensions), CV_32F, data).t();  //[bs,84,8400]=>[bs,8400,84]
+		// std::cout << output0.rows << " " << output0.cols << " " << output0.size() << std::endl;
 
-        data = (float*)output0.data;
+		data = (float*)output0.data;
 		if (this->task == "det")
 			class_num = dimensions - 4;
 		else if (this->task == "pose")
 			class_num = dimensions - 4 - 3 * key_point_num;
-        else if (this->task == "obb")
+		else if (this->task == "obb")
 			class_num = dimensions - 5;  
-        else if (this->task == "seg") 
-        {
+		else if (this->task == "seg") 
+		{
 		outputMaskTensorShape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
 		maskProtosShape = {1, (int)outputMaskTensorShape[1], (int)outputMaskTensorShape[2], (int)outputMaskTensorShape[3]};
 		maskProtosLength = VectorProduct(maskProtosShape); 
 		class_num = dimensions - 4 - (int)outputMaskTensorShape[1];
-        }
-    }
+		}
+	}
 	
-    // std::cout << class_num << std::endl;
+	// std::cout << class_num << std::endl;
 	for (int img_idx = 0; img_idx < srcImgs.size(); ++img_idx) 
-    {
+	{
 		std::vector<int> class_ids;
 		std::vector<float> confidences;
 		std::vector<cv::Rect> boxes; 
-        std::vector<cv::RotatedRect> obboxes; // isobb
-        std::vector<std::vector<PoseKeyPoint>> pose_key_points; // pose
-        std::vector<std::vector<float>> picked_proposals;   // output0[:,:, 4 + _className.size():net_width]===> for mask
+		std::vector<cv::RotatedRect> obboxes; // isobb
+		std::vector<std::vector<PoseKeyPoint>> pose_key_points; // pose
+		std::vector<std::vector<float>> picked_proposals;   // output0[:,:, 4 + _className.size():net_width]===> for mask
 
-        if (yolov8) 
-        {
-		for (int i = 0; i < rows; ++i) 
+		if (yolov8) 
 		{
-			float *classes_scores = data + 4;
-			cv::Mat scores(1, class_num, CV_32FC1, classes_scores);
-			cv::Point class_id;
-			double max_class_score;
-			cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+			for (int i = 0; i < rows; ++i) 
+			{
+				float *classes_scores = data + 4;
+				cv::Mat scores(1, class_num, CV_32FC1, classes_scores);
+				cv::Point class_id;
+				double max_class_score;
+				cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
 
-			if (max_class_score < _classThreshold) {
-			    data += dimensions;
-			    continue;
-			}
+				if (max_class_score < _classThreshold) {
+					data += dimensions;
+					continue;
+				}
 
-			class_ids.push_back(class_id.x);
-			confidences.push_back(max_class_score);
+				class_ids.push_back(class_id.x);
+				confidences.push_back(max_class_score);
 
-			float x = (data[0] - params[img_idx][2]) / params[img_idx][0];  //x
-			float y = (data[1] - params[img_idx][3]) / params[img_idx][1];  //y
-			float w = data[2] / params[img_idx][0];  //w
-			float h = data[3] / params[img_idx][1];  //h
+				float x = (data[0] - params[img_idx][2]) / params[img_idx][0];  //x
+				float y = (data[1] - params[img_idx][3]) / params[img_idx][1];  //y
+				float w = data[2] / params[img_idx][0];  //w
+				float h = data[3] / params[img_idx][1];  //h
 
-			if (this->task == "obb") {
-			    int angle_index = dimensions - 1;
-			    float angle = data[angle_index] / CV_PI * 180.0;
-			    // std::cout << data[angle_index] << "*****" << angle << std::endl;
-			    obboxes.push_back(cv::RotatedRect(cv::Point2f(x, y), cv::Size(w, h), angle));
-			}
-			else if (this->task == "det") {
-			    int left = MAX(int(x - 0.5 * w + 0.5), 0);
-			    int top = MAX(int(y - 0.5 * h + 0.5), 0);
-			    boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
-			}
-			else if (this->task == "pose") {
-			    int left = MAX(int(x - 0.5 * w + 0.5), 0);
-			    int top = MAX(int(y - 0.5 * h + 0.5), 0);
-			    boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
-			    
-			    int key_point_length = dimensions - 5;
-			    if (key_point_num * 3 != key_point_length) {
-			        std::cout << "Pose should be shape [x, y, confidence] with 17-points" << std::endl;
-			        return false;
-			    }
+				if (this->task == "obb") {
+					int angle_index = dimensions - 1;
+					float angle = data[angle_index] / CV_PI * 180.0;
+					// std::cout << data[angle_index] << "*****" << angle << std::endl;
+					obboxes.push_back(cv::RotatedRect(cv::Point2f(x, y), cv::Size(w, h), angle));
+				}
+				else if (this->task == "det") {
+					int left = MAX(int(x - 0.5 * w + 0.5), 0);
+					int top = MAX(int(y - 0.5 * h + 0.5), 0);
+					boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
+				}
+				else if (this->task == "pose") {
+					int left = MAX(int(x - 0.5 * w + 0.5), 0);
+					int top = MAX(int(y - 0.5 * h + 0.5), 0);
+					boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
+					
+					int key_point_length = dimensions - 5;
+					if (key_point_num * 3 != key_point_length) {
+						std::cout << "Pose should be shape [x, y, confidence] with 17-points" << std::endl;
+						return false;
+					}
 
-			    std::vector<PoseKeyPoint> temp_kpts;
-			    for (int kpt = 0; kpt < key_point_length; kpt += 3) {
-			        PoseKeyPoint temp_kp;
-			        temp_kp.x = (data[5 + kpt] - params[img_idx][2]) / params[img_idx][0];
-			        temp_kp.y = (data[6 + kpt] - params[img_idx][3]) / params[img_idx][1];
-			        temp_kp.confidence = data[7 + kpt];
-			        temp_kpts.push_back(temp_kp);
-			    }
-			    pose_key_points.push_back(temp_kpts);
+					std::vector<PoseKeyPoint> temp_kpts;
+					for (int kpt = 0; kpt < key_point_length; kpt += 3) {
+						PoseKeyPoint temp_kp;
+						temp_kp.x = (data[5 + kpt] - params[img_idx][2]) / params[img_idx][0];
+						temp_kp.y = (data[6 + kpt] - params[img_idx][3]) / params[img_idx][1];
+						temp_kp.confidence = data[7 + kpt];
+						temp_kpts.push_back(temp_kp);
+					}
+					pose_key_points.push_back(temp_kpts);
+				}
+				else if (this->task == "seg") {
+					std::vector<float> temp_proto(data + 4 + class_num, data + dimensions);
+					picked_proposals.push_back(temp_proto);
+					int left = MAX(int(x - 0.5 * w + 0.5), 0);
+					int top = MAX(int(y - 0.5 * h + 0.5), 0);
+					boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
+				}
+				data += dimensions;
 			}
-			else if (this->task == "seg") {
-			    std::vector<float> temp_proto(data + 4 + class_num, data + dimensions);
-			    picked_proposals.push_back(temp_proto);
-			    int left = MAX(int(x - 0.5 * w + 0.5), 0);
-			    int top = MAX(int(y - 0.5 * h + 0.5), 0);
-			    boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
-			}
-			data += dimensions;
 		}
-        }
-        else // yolov5
-        {
-		for (int i = 0; i < rows; ++i) 
+		else // yolov5
 		{
-			float confidence = data[4];
-			if (confidence < _classThreshold) {
-			    data += dimensions;
-			    continue;
-			}
+			for (int i = 0; i < rows; ++i) 
+			{
+				float confidence = data[4];
+				if (confidence < _classThreshold) {
+					data += dimensions;
+					continue;
+				}
 
-			float *classes_scores = data + 5;
-			cv::Mat scores(1, class_num, CV_32F, classes_scores);
-			cv::Point class_id;
-			double max_class_score;
-			cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+				float *classes_scores = data + 5;
+				cv::Mat scores(1, class_num, CV_32F, classes_scores);
+				cv::Point class_id;
+				double max_class_score;
+				cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
 
-			if (max_class_score < _classThreshold) {
-			    data += dimensions;
-			    continue;
-			}
+				if (max_class_score < _classThreshold) {
+					data += dimensions;
+					continue;
+				}
 
-			class_ids.push_back(class_id.x);
-			confidences.push_back(confidence * max_class_score);
+				class_ids.push_back(class_id.x);
+				confidences.push_back(confidence * max_class_score);
 
-			float x = (data[0] - params[img_idx][2]) / params[img_idx][0];  //x
-			float y = (data[1] - params[img_idx][3]) / params[img_idx][1];  //y
-			float w = data[2] / params[img_idx][0];  //w
-			float h = data[3] / params[img_idx][1];  //h
+				float x = (data[0] - params[img_idx][2]) / params[img_idx][0];  //x
+				float y = (data[1] - params[img_idx][3]) / params[img_idx][1];  //y
+				float w = data[2] / params[img_idx][0];  //w
+				float h = data[3] / params[img_idx][1];  //h
 
-			if (this->task == "obb") {
-			    // cv::Mat output0(rows, dimensions, CV_32F, data);  // v5obb   1, 25200, 85->25200, 85
-			    int nc = dimensions - 5 - 180; // number of classes
-			    cv::Mat angle_scores =  output0.row(i).colRange(5 + nc, dimensions);
-			    cv::Point angle_id;
-			    double max_angle_score;
-			    cv::minMaxLoc(angle_scores, 0, &max_angle_score, 0, &angle_id);
-			    float angle = 90 - angle_id.x;
-			    // std::cout << angle_id.x << "*****" << angle << std::endl;
-			    obboxes.push_back(cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(w, h), angle));
+				if (this->task == "obb") {
+					// cv::Mat output0(rows, dimensions, CV_32F, data);  // v5obb   1, 25200, 85->25200, 85
+					int nc = dimensions - 5 - 180; // number of classes
+					cv::Mat angle_scores =  output0.row(i).colRange(5 + nc, dimensions);
+					cv::Point angle_id;
+					double max_angle_score;
+					cv::minMaxLoc(angle_scores, 0, &max_angle_score, 0, &angle_id);
+					float angle = 90 - angle_id.x;
+					// std::cout << angle_id.x << "*****" << angle << std::endl;
+					obboxes.push_back(cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(w, h), angle));
+				}
+				else if (this->task == "det") {
+					int left = MAX(int(x - 0.5 * w + 0.5), 0);
+					int top = MAX(int(y - 0.5 * h + 0.5), 0);
+					boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
+				}
+				else if (this->task == "seg") {
+					std::vector<float> temp_proto(data + 5 + class_num, data + dimensions);
+					picked_proposals.push_back(temp_proto);
+					int left = MAX(int(x - 0.5 * w + 0.5), 0);
+					int top = MAX(int(y - 0.5 * h + 0.5), 0);
+					boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
+				}
+				data += dimensions;
 			}
-			else if (this->task == "det") {
-			    int left = MAX(int(x - 0.5 * w + 0.5), 0);
-			    int top = MAX(int(y - 0.5 * h + 0.5), 0);
-			    boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
-			}
-			else if (this->task == "seg") {
-			    std::vector<float> temp_proto(data + 5 + class_num, data + dimensions);
-			    picked_proposals.push_back(temp_proto);
-			    int left = MAX(int(x - 0.5 * w + 0.5), 0);
-			    int top = MAX(int(y - 0.5 * h + 0.5), 0);
-			    boxes.push_back(cv::Rect(left, top, int(w + 0.5), int(h + 0.5)));
-			}
-			data += dimensions;
-		}
 		}
 
 		std::vector<int> nms_result;
-        if (this->task == "obb") 
+		if (this->task == "obb") 
 		    cv::dnn::NMSBoxes(obboxes, confidences, _classThreshold, _nmsThreshold, nms_result);
-        else
-		cv::dnn::NMSBoxes(boxes, confidences, _classThreshold, _nmsThreshold, nms_result);
+		else
+			cv::dnn::NMSBoxes(boxes, confidences, _classThreshold, _nmsThreshold, nms_result);
 
-        std::vector<std::vector<float>> temp_mask_proposals; // seg
+		std::vector<std::vector<float>> temp_mask_proposals; // seg
 		cv::Rect holeImgRect(0, 0, srcImgs[img_idx].cols, srcImgs[img_idx].rows); // 定义一个图片大小的box
 
 		std::vector<YolovOutput> temp_output;
 		for (int i = 0; i < nms_result.size(); ++i) 
-        {
+		{
 			int idx = nms_result[i];
 			YolovOutput result;
 			result.id = class_ids[idx];
 			result.confidence = confidences[idx];
 
-		if (this->task == "obb")
-			result.rotatedBox = obboxes[idx];
-		else if (this->task == "det")
-			result.box = boxes[idx] & holeImgRect;
-		else if (this->task == "pose") {
-			result.box = boxes[idx] & holeImgRect;
-			result.keyPoints = pose_key_points[idx];
-		}
-		else if (this->task == "seg") {
-			result.box = boxes[idx] & holeImgRect;
-			temp_mask_proposals.push_back(picked_proposals[idx]);
-		}
+			if (this->task == "obb")
+				result.rotatedBox = obboxes[idx];
+			else if (this->task == "det")
+				result.box = boxes[idx] & holeImgRect;
+			else if (this->task == "pose") {
+				result.box = boxes[idx] & holeImgRect;
+				result.keyPoints = pose_key_points[idx];
+			}
+			else if (this->task == "seg") {
+				result.box = boxes[idx] & holeImgRect;
+				temp_mask_proposals.push_back(picked_proposals[idx]);
+			}
 
 			temp_output.push_back(result);
 		}
 
-        if (this->task == "seg") {
-		MaskParams mask_params;
-		mask_params.params = params[img_idx];
-		mask_params.srcImgShape = srcImgs[img_idx].size();
-		mask_params.netHeight = _netHeight;
-		mask_params.netWidth = _netWidth;
-		mask_params.maskThreshold = _maskThreshold;
-		cv::Mat mask_protos = cv::Mat(maskProtosShape, CV_32F, output_tensors[1].GetTensorMutableData<float>() + img_idx * maskProtosLength);
-		for (int i = 0; i < temp_mask_proposals.size(); ++i) {
-			GetMask(cv::Mat(temp_mask_proposals[i]).t(), mask_protos, temp_output[i], mask_params);
+		if (this->task == "seg") {
+			MaskParams mask_params;
+			mask_params.params = params[img_idx];
+			mask_params.srcImgShape = srcImgs[img_idx].size();
+			mask_params.netHeight = _netHeight;
+			mask_params.netWidth = _netWidth;
+			mask_params.maskThreshold = _maskThreshold;
+			cv::Mat mask_protos = cv::Mat(maskProtosShape, CV_32F, output_tensors[1].GetTensorMutableData<float>() + img_idx * maskProtosLength);
+			for (int i = 0; i < temp_mask_proposals.size(); ++i) {
+				GetMask(cv::Mat(temp_mask_proposals[i]).t(), mask_protos, temp_output[i], mask_params);
+			}
 		}
-        }
 
 		output.push_back(temp_output);
 	}
@@ -638,20 +639,20 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 
 void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 
-    double scale;
-    int thickness;
+	double scale;
+	int thickness;
 
-    if (img.cols > 3000)
-        scale = 1.5, thickness = 2;
-    else
-        scale = 0.5, thickness = 1;
+	if (img.cols > 3000)
+		scale = 1.5, thickness = 2;
+	else
+		scale = 0.5, thickness = 1;
 
-    cv::Mat mask = img.clone();
+	cv::Mat mask = img.clone();
 
-    for (int i = 0; i < result.size(); i++) 
-    {
-        if (result[i].confidence > _classThreshold)
-        {   
+	for (int i = 0; i < result.size(); i++) 
+	{
+		if (result[i].confidence > _classThreshold)
+		{   
 		int idx = result[i].id + 3;
 		cv::Scalar color = cv::Scalar(37 * idx * idx % 255, 17 * idx * idx % 255, 29 * idx * idx % 255);
 
@@ -712,10 +713,10 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 		}
 		else if (this->task == "seg")
 			mask(result[i].box).setTo(color[result[i].id], result[i].boxMask);
-        }
+		}
 	}
-    if (this->task == "seg")
-        cv::addWeighted(img, 0.5, mask, 0.8, 0, img);
+	if (this->task == "seg")
+		cv::addWeighted(img, 0.5, mask, 0.8, 0, img);
 }
 
 void YolovOnnx::GetMask(const cv::Mat& maskProposals, const cv::Mat& maskProtos, YolovOutput& output, const MaskParams& maskParams) {
@@ -780,5 +781,34 @@ void YolovOnnx::GetMask(const cv::Mat& maskProposals, const cv::Mat& maskProtos,
 		resize(mask, mask, temp_rect.size(), cv::INTER_NEAREST);
 	}
 	output.boxMask = mask;
+}
+// ----------------------------------------------------------------------------
+// 跟踪结果画图：直接画轨迹框（Object 自带 id/坐标/类别/置信度，无需写回检测结构）
+// 风格与 DrawPred 一致：同色号公式、同字号/线宽规则、标签开关（类别/置信度/id）
+// ----------------------------------------------------------------------------
+void YolovOnnx::DrawPredTrack(cv::Mat& img, const std::vector<Object>& tracks) {
+	double scale;
+	int thickness;
+	if (img.cols > 3000) scale = 1.5, thickness = 2;
+	else                 scale = 0.5, thickness = 1;
 
+	for (size_t i = 0; i < tracks.size(); ++i) {
+		const Object& t = tracks[i];
+		cv::Rect box((int)t.rect.x, (int)t.rect.y, (int)t.rect.width, (int)t.rect.height);
+		if (box.area() <= 0) continue;
+		int idx = t.label + 3;
+		cv::Scalar color = cv::Scalar(37 * idx * idx % 255, 17 * idx * idx % 255, 29 * idx * idx % 255);
+		cv::rectangle(img, box, color, thickness, cv::LINE_AA);
+
+		std::string label;
+		if (drawClass) label += (t.label >= 0 && t.label < (int)_className.size()) ? _className[t.label] : ("class_" + std::to_string(t.label));
+		if (drawConf)  { std::string conf = cv::format("%.2f", t.prob); if (!label.empty()) label += " "; label += conf; }
+		if (drawId)    { if (!label.empty()) label += " "; label += "id:" + std::to_string(t.track_id); }
+		if (!label.empty()) {
+			int baseLine;
+			cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);
+			cv::rectangle(img, cv::Point(box.x, box.y - labelSize.height - 2), cv::Point(box.x + labelSize.width, box.y - 2), color, -1, cv::LINE_AA);
+			cv::putText(img, label, cv::Point(box.x, box.y - 2), cv::FONT_HERSHEY_COMPLEX, scale, cv::Scalar(225, 255, 255), thickness, cv::LINE_AA);
+		}
+	}
 }

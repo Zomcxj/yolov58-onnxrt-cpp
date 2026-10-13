@@ -2,6 +2,8 @@
 
 YOLOv8 / v5 ONNX Runtime 推理工具：命令行 + Qt 图形界面。
 
+> 要求 ONNX Runtime ≥ 1.13（旧版兼容代码已移除）。
+
 ## 功能
 
 - 任务：det / obb / pose / seg / cls

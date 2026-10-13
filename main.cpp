@@ -20,9 +20,9 @@ struct Options {
     std::string input;       // argv[2]：图片/目录 / 视频文件 / RTSP 流
     std::string task;        // argv[3]：det|obb|pose|seg|cls
     bool   crop = false;     // 裁剪推理（仅 det/obb）
-    cv::Size cropSize{1280, 1280}; // 切块尺寸（宽×高）
-    int    cropOverlapW = -1; // 列(x)重叠像素；-1 = 自动
-    int    cropOverlapH = -1; // 行(y)重叠像素；-1 = 自动；0 = 无重叠
+    cv::Size cropSize{640, 640}; // 切块尺寸（宽×高）
+    int    cropOverlapW = 160; // 列(x)重叠像素；-1 = 自动
+    int    cropOverlapH = 160; // 行(y)重叠像素；-1 = 自动；0 = 无重叠
     float  conf = 0.5f;      // 跨块合并置信度阈值
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
     bool   track = false;    // --track：检测后接 ByteTrack 跟踪（cls 无框，已在 main 里关闭）
@@ -175,8 +175,8 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         }
 
         if (opt.draw && opt.task != "cls") {              // cls 无框可画；--no-draw 跳过
-            if (opt.track) MYTrack::tagTrackIds(tracks, result);
-            yolo.DrawPred(img, result);
+            if (opt.track) yolo.DrawPredTrack(img, tracks);   // 跟踪：直接画轨迹框（Object 自带 id）
+            else           yolo.DrawPred(img, result);
             if (opt.save) cv::imwrite(savePath + pathBasename(f), img);
         }
         std::cout << pathBasename(f) << "  [" << result.size() << " objs";
@@ -313,11 +313,13 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
         if (opt.previewFrames && !opt.frameDir.empty()) origFrame = frame.clone();
 
         if (opt.draw && opt.task != "cls") {
-            if (process) {
-                if (opt.track) MYTrack::tagTrackIds(tracks, result);
-                lastDrawn = result;            // 抽帧间隔用上一帧结果顶着
+            if (process) lastDrawn = result;                 // 抽帧间隔用上一帧结果顶着
+            if (opt.track) {
+                if (process) yolo.DrawPredTrack(frame, tracks);        // 跟踪：直接画轨迹框（Object 自带 id）
+                else if (!lastDrawn.empty()) yolo.DrawPred(frame, lastDrawn);   // 跳帧：沿用上次检测（不带 id）
+            } else if (!lastDrawn.empty()) {
+                yolo.DrawPred(frame, lastDrawn);
             }
-            if (!lastDrawn.empty()) yolo.DrawPred(frame, lastDrawn);
         }
 
         std::string sfInfo;                    // GUI 实时预览：原始/处理 A/B 交替双流（左右两栏）
@@ -368,8 +370,8 @@ static void printUsage(const char* prog) {
         "\n"
         "Options:\n"
         "  --crop             启用裁剪（切块）推理，仅 det/obb 生效\n"
-        "  --crop-size WxH   切块尺寸，默认 1280；支持 800x640（宽x高）或 1280（正方形）\n"
-        "  --crop-overlap WxH   切块重叠像素：列x行分轴，如 60x240；单值 N = 两轴同值；默认自动(20%且≥200px)\n"
+        "  --crop-size WxH   切块尺寸，默认 640；支持 800x640（宽x高）或 1280（正方形）\n"
+        "  --crop-overlap WxH   切块重叠像素：列x行分轴，如 60x240；单值 N = 两轴同值；默认 160x160（-1 = 自动 20%且≥200px）\n"
         "  --threads N        裁剪并行线程数，默认 = CPU 核数\n"
         "  --export-frames   导出 LabelMe json：图片模式存原图同目录（原图不动）；视频模式逐帧原图+json 存 <save-dir>/<视频名>/\n"
         "  --conf F           置信度阈值（检测 NMS + 跨块合并 + 画框），默认 0.5\n"
