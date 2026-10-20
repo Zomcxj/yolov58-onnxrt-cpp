@@ -6,6 +6,11 @@
 #include <QDateTime>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QAbstractSpinBox>
+#include <QApplication>
+#include <QEvent>
+#include <QVector>
+#include <QPair>
 #include <QSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -44,6 +49,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // ---------- 模型 / 任务 ----------
     auto* gbModel = new QGroupBox("模型", central);
     auto* gModel = new QGridLayout(gbModel);
+    gModel->setContentsMargins(8, 10, 8, 8);   // 紧凑内边距，内容铺满整组
+    gModel->setHorizontalSpacing(8);
+    gModel->setVerticalSpacing(6);
     m_model = new QLineEdit(gbModel);        m_model->setPlaceholderText("onnx 模型路径");
     m_labels = new QLineEdit(gbModel);       m_labels->setPlaceholderText("留空 = 模型同名 txt");
     m_task = new QComboBox(gbModel);
@@ -54,6 +62,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     gModel->addWidget(m_model, 0, 1);        gModel->addWidget(bModel, 0, 2);
     gModel->addWidget(new QLabel("类别txt:", gbModel), 1, 0);
     gModel->addWidget(m_labels, 1, 1);       gModel->addWidget(bLabels, 1, 2);
+    // 路径框铺满：只设最小宽度，由列伸展吃满剩余空间（不再硬性截断）
+    m_model->setMinimumWidth(200);  m_labels->setMinimumWidth(200);
+    gModel->setColumnStretch(1, 10);         // 路径列吃满剩余宽度
     gModel->addWidget(new QLabel("任务:", gbModel), 0, 3);
     gModel->addWidget(m_task, 0, 4);
     root->addWidget(gbModel);
@@ -61,6 +72,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // ---------- 推理参数 ----------
     auto* gbInf = new QGroupBox("推理参数", central);
     auto* gInf = new QGridLayout(gbInf);
+    gInf->setContentsMargins(8, 10, 8, 8);
+    gInf->setHorizontalSpacing(8);
+    gInf->setVerticalSpacing(6);
     m_conf = new QDoubleSpinBox(gbInf);
     m_conf->setRange(0.05, 0.95); m_conf->setSingleStep(0.05); m_conf->setValue(0.5);
     m_conf->setToolTip("置信度阈值：模型 NMS + 跨块合并 + 画框 三处贯通");
@@ -101,8 +115,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_cropH, qOverload<int>(&QSpinBox::valueChanged), this, tileSync);
     connect(m_ovW,   qOverload<int>(&QSpinBox::valueChanged), this, tileSync);
     connect(m_ovH,   qOverload<int>(&QSpinBox::valueChanged), this, tileSync);
+    // 滑窗 4 参数随勾选启用（未勾选时置灰，减少无效干扰）；GPU 编号随 GPU 勾选启用
+    connect(m_crop, &QCheckBox::toggled, this, [this](bool on) {
+        for (QSpinBox* s : {m_cropW, m_cropH, m_ovW, m_ovH}) s->setEnabled(on);
+    });
+    for (QSpinBox* s : {m_cropW, m_cropH, m_ovW, m_ovH}) s->setEnabled(m_crop->isChecked());
+    connect(m_cuda, &QCheckBox::toggled, m_cudaId, &QSpinBox::setEnabled);
     m_origInfo = new QLabel(central);                     // 原图尺寸（显示在线程右侧）
-    m_origInfo->setStyleSheet("color:#8a919c; background:transparent;");
     // 参数行：水平流式聚簇（相关参数紧挨，不再按列拉开）
     auto* row0 = new QHBoxLayout;
     row0->addWidget(new QLabel("置信度:", gbInf));
@@ -140,8 +159,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     row2->addWidget(bDir);
     row2->addSpacing(14);
     row2->addWidget(m_preview);
-    row2->addWidget(m_cuda);      row2->addWidget(m_cudaId);
     row2->addWidget(m_exportJson);
+    row2->addSpacing(14);
+    row2->addWidget(m_cuda);      row2->addWidget(m_cudaId);
     gInf->addLayout(row2, 2, 0, 1, 2);
     // 输入框统一宽度（块/重叠/线程/抽帧/GPU编号）
     for (QSpinBox* s : {m_cropW, m_cropH, m_ovW, m_ovH, m_threads, m_frameStep, m_cudaId})
@@ -159,12 +179,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_start = new QPushButton("开始推理", central);
     m_stop = new QPushButton("停止", central);
     m_stop->setEnabled(false);
-    QFont bf = m_start->font(); bf.setBold(true); m_start->setFont(bf);
-    m_start->setStyleSheet(
-        "QPushButton { background:#3a7fc1; color:white; font-weight:bold; border:none; border-radius:6px; padding:5px 18px; }"
-        "QPushButton:hover { background:#2f6cab; }"
-        "QPushButton:pressed { background:#275d92; }"
-        "QPushButton:disabled { background:#a9c7e8; color:#eef3f8; }");
     hIn->addWidget(new QLabel("输入:", central));
     hIn->addWidget(m_input, 1);
     hIn->addWidget(bImg); hIn->addWidget(bVideo); hIn->addWidget(bFold);
@@ -181,7 +195,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     for (QLabel* v : {m_viewOrig, m_viewRes}) {
         v->setAlignment(Qt::AlignCenter);
         v->setFrameShape(QFrame::Box);
-        v->setStyleSheet("background:#202020; color:#909090;");
+        v->setObjectName("viewArea");   // 主题单独处理（预览区恒深底，看图对比度优先）
         v->setText(v == m_viewOrig ? "原图 / 原视频" : "结果图 / 结果视频");
         v->setMinimumSize(1, 1);
         v->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
@@ -201,11 +215,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_log->setReadOnly(true);
     m_log->setMaximumBlockCount(2000);
     m_log->setMinimumHeight(120);
+    m_log->setFont(QFont("Consolas", 9));   // 等宽：时间戳/表格对齐
     root->addWidget(m_log);
 
     setCentralWidget(central);
 
-    applyBaseStyle();                      // 界面样式
+    // ---------- 输入框滚轮优化 ----------
+    // 聚焦时滚轮正常微调；未聚焦时需 Ctrl+滚轮 才生效，避免鼠标滚动画过参数区误改
+    for (auto* sb : central->findChildren<QAbstractSpinBox*>()) {
+        sb->setFocusPolicy(Qt::StrongFocus);
+        sb->installEventFilter(this);
+        const QString tip = sb->toolTip();
+        sb->setToolTip(tip.isEmpty() ? QStringLiteral("滚轮：聚焦后直接滚动，或按住 Ctrl 滚动")
+                                     : tip + QStringLiteral("\n滚轮：聚焦后直接滚动，或按住 Ctrl 滚动"));
+    }
+
+    applyBaseStyle();                      // 基础样式（单主题，无切换）
 
     // ---------- 信号 ----------
     connect(bModel,  &QPushButton::clicked, this, &MainWindow::onPickModel);
@@ -234,6 +259,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_proc, SIGNAL(errorOccurred(QProcess::ProcessError)), this, SLOT(onProcError(QProcess::ProcessError)));
 }
 
+// 滚轮优化：聚焦时滚轮正常微调；未聚焦时需按住 Ctrl 才能改值（否则吃掉事件，防误触）
+bool MainWindow::eventFilter(QObject* obj, QEvent* ev) {
+    if (ev->type() == QEvent::Wheel) {
+        if (auto* sb = qobject_cast<QAbstractSpinBox*>(obj)) {
+            const bool ctrl = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
+            if (!sb->hasFocus() && !ctrl) { ev->ignore(); return true; }
+        }
+    }
+    return QMainWindow::eventFilter(obj, ev);
+}
+
+// ----------------------------------------------------------------------------
+// 界面样式：色板常量集中在此，改这里即可全局生效
 // ----------------------------------------------------------------------------
 void MainWindow::applyBaseStyle() {
     // 色板
