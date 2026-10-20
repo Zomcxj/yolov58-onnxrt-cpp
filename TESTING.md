@@ -1,4 +1,4 @@
-# yolov-onnxrt-v2 测试指令全集
+# yolov58-onnxrt-cpp 测试指令全集
 
 # 终端直接复制执行（Git Bash / Linux 通用）。开头先按平台定义可执行名，后面统一用 $BIN / $API。
 `<...>` 占位符按实际替换：`<model.onnx>` 模型、`<img.jpg>` 图片、`<img_dir>` 图片目录、
@@ -6,7 +6,7 @@
 
 ```bash
 # 可执行名：Windows 用 .exe，Linux 去掉
-BIN=./build/yolov-onnxrt.exe       # Linux: BIN=./build/yolov-onnxrt
+BIN=./build/yolov58-onnxrt-cpp.exe       # Linux: BIN=./build/yolov58-onnxrt-cpp
 API=./build/api_demo.exe           # Linux: API=./build/api_demo
 # ========== 0. 编译 ==========
 cmake -S . -B build && cmake --build build -j 4          # 改名/增删文件后必须重跑 cmake -S . -B build
@@ -88,7 +88,7 @@ grep -c "^frame" <进度日志>                                              # �
 python compose.py output/<视频名> output/<视频名>_composed.mp4 <原视频fps>               # 调整完合成（fps 必须按原视频）
 
 # ========== 10. GPU ==========
-./build/yolov-onnxrt <model.onnx> <video.mp4> det --crop --crop-size <WxH> --crop-overlap <列x行> --conf 0.3 --threads 4 --cuda --gpu 0
+./build/yolov58-onnxrt-cpp <model.onnx> <video.mp4> det --crop --crop-size <WxH> --crop-overlap <列x行> --conf 0.3 --threads 4 --cuda --gpu 0
 # → 横幅 Infer model on GPU! + nvidia-smi 有占用 + ms/帧大幅下降
 # CPU 包跑 --cuda → Your ORT build without GPU. Change to CPU.（不崩）
 # GPU 包但横幅回 CPU → export LD_LIBRARY_PATH=/path/to/onnxruntime-gpu/lib:$LD_LIBRARY_PATH
@@ -108,4 +108,18 @@ $BIN <bad.onnx> <img.jpg> det                       # → cannot load model
 
 # ========== 13. 坏流视频预处理 ==========
 ffmpeg -err_detect ignore_err -i <broken.mp4> -c:v libx264 <rec.mp4>    # HEVC POC 错误先洗流再推理
+
+# ========== 14. GUI（Qt 界面，Windows 为主）==========
+./tools/build_gui.sh                               # 构建（自动探测 qmake/make；产物 tools/build-gui/YOLOv58InferGUI.exe）
+QTDIR=/path/to/Qt/5.12.12/gcc_64 ./tools/build_gui.sh   # 指定 Qt 路径（Linux/macOS）
+tools/build-gui/YOLOv58InferGUI.exe               # 启动（同目录需 cli/ 含 yolov58-onnxrt-cpp.exe + DLL）
+# GUI 行为：选模型/任务 → 选输入（图片/视频/文件夹）→ 开始推理
+#   左栏原图（勾滑窗时叠画切块网格）、右栏结果；日志区带 [HH:mm:ss.zzz] 北京时间戳
+#   滑窗参数未勾选时置灰；GPU 编号随 GPU 勾选启用；数值框滚轮需聚焦或 Ctrl+滚轮才改值
+CLI 找不到时                                         # → [error] 找不到 yolov58-onnxrt-cpp.exe（放到同目录或上级）
+点停止                                               # → 子进程中断，按钮恢复初始态
+
+# ========== 15. 库层调用（api_demo）==========
+$API <model.onnx> <img.jpg> det                     # 滑窗重载默认: 640x640, 重叠160x160, conf=-1=沿用 _classThreshold
+$API <model.onnx> <img.jpg> obb                     # obb 走 obboxFilter 跨块合并
 ```
