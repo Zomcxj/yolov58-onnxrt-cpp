@@ -1,3 +1,7 @@
+// Derived from yolov8-opencv-onnxruntime-cpp
+//   https://github.com/UNeedCryDear/yolov8-opencv-onnxruntime-cpp
+// Copyright (c) UNeedCryDear and contributors - Apache License 2.0
+// Modifications Copyright (c) 2026 Zomcxj - modification list in LICENSE, section 0
 #include "yolo_onnx.h"
 #include "BYTETracker.h"                // DrawPredTrack：Object（rect/label/prob/track_id）
 

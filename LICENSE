@@ -1,0 +1,165 @@
+MIT License
+
+Copyright (c) 2026 Zomcxj
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+第三方组件归属声明 / Third-Party Notices
+================================================================================
+
+本项目包含或依赖以下第三方作品，其版权归原作者所有，遵循各自的许可协议。
+以下声明为 MIT 许可 "The above copyright notice ... shall be included in all
+copies" 条款所要求的保留声明。
+
+
+--------------------------------------------------------------------------------
+0. yolov8-opencv-onnxruntime-cpp（YOLOv8 推理核心，本项目 yolo/ 目录的基础）
+--------------------------------------------------------------------------------
+Copyright (c) UNeedCryDear and contributors
+
+Licensed under the Apache License, Version 2.0.
+Project: https://github.com/UNeedCryDear/yolov8-opencv-onnxruntime-cpp
+License: https://www.apache.org/licenses/LICENSE-2.0
+
+【受影响文件】
+  yolo/yolo_onnx.h
+  yolo/yolo_onnx.cpp
+
+  上述文件由原项目的以下文件**合并、改写**而来：
+    yolov8_onnx.h/.cpp        （检测主体：ReadModel / OnnxDetect / LetterBox / NMS）
+    yolov8_seg_onnx.h/.cpp    （实例分割：GetMask / boxMask 绘制）
+    yolov8_pose_onnx.h/.cpp   （姿态估计：关键点解析与骨骼连线绘制）
+    yolov8_obb_onnx.h/.cpp    （旋转框：OBB 后处理与四点绘制）
+    yolov8_utils.h/.cpp       （工具函数：LetterBox / clip / 坐标还原）
+
+【本项目所做的修改】（Apache 2.0 §4(b) 要求的修改说明）
+  1. 将上述 5 组文件合并为单一 YolovOnnx 类，按 task 字符串（det/obb/pose/seg/cls）分派；
+  2. 删除对 ONNX Runtime < 1.13 的旧版 API 兼容分支（#if ORT_API_VERSION < ... 全部移除），
+     改为仅使用 OrtApi 函数表成员写法，使同一份代码可同时链接 CPU 包与 GPU 包；
+  3. 新增 CUDA Execution Provider 启用逻辑：append CUDA EP 失败时 try/catch 回退 CPU，
+     并新增 --cuda / --gpu 命令行开关与启动横幅；
+  4. 新增滑窗切块推理（yolo/slide_deal.h/.cpp，本项目独立实现）：
+     图像分块、多线程并行推理、跨块 IoU 去重合并（hbboxFilter / obboxFilter）；
+  5. 新增标签渲染开关 drawClass / drawConf / drawId，以及 DrawPredTrack
+     （直接渲染 ByteTrack 跟踪结果 Object，不再回写检测结构）；
+  6. 新增 LoadClassNames：按 <模型名>.txt 约定加载类别名，缺失时回退 class_0..N；
+  7. 画图公共逻辑抽取为 drawScaleThickness / boxColor / drawLabelBg 三个静态函数；
+  8. 修复：seg 掩膜仅在 task=="seg" 时克隆整图（原实现每帧无条件 clone）；
+  9. 代码风格统一（缩进、命名）、增加中文注释与参数校验。
+
+【未修改部分】
+  bytetrack/ 目录与 yolo/ 下的推理逻辑无直接派生关系，见下方第 1 节。
+  本项目的 main.cpp / api_demo.cpp / tools/（Qt GUI）为原创代码。
+
+Apache License 2.0 全文随本仓库分发：LICENSES/Apache-2.0.txt
+（分发二进制包时，请一并随附该文件。）
+
+本项目中 `yolo/yolo_onnx.h/.cpp` 为 Apache-2.0 衍生作品，依其原协议（Apache License 2.0）
+随本仓库分发；其余原创代码以 MIT 分发。上述版权与归属声明及修改说明即为本许可的落实。
+
+
+--------------------------------------------------------------------------------
+1. ByteTrack（多目标跟踪，bytetrack/ 目录为本项目移植/改动版本）
+--------------------------------------------------------------------------------
+Copyright (c) 2021 Yifu Zhang
+
+Licensed under the MIT License.
+
+Project: https://github.com/ifzhang/ByteTrack
+
+The MIT License
+
+Copyright (c) 2021 Yifu Zhang
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+注意：bytetrack/lapjv.cpp、utils.cpp 中的线性分配（LAPJV）实现源自上述项目，
+同样适用 MIT 条款。
+
+
+--------------------------------------------------------------------------------
+2. Eigen3（线性代数，仅 bytetrack 使用 Core/Dense）
+--------------------------------------------------------------------------------
+Copyright (C) 2008-2011 Gael Guennebaud <gael.guennebaud@inria.fr>
+Copyright (C) 2008-2011 Benoit Jacob <jacob.benoit.1@gmail.com>
+Copyright (C) 2011-2019 The Eigen Authors
+
+Eigen 以 MPL2（Mozilla Public License v2.0）为主许可，部分模块为 BSD/LGPL 双许可。
+本项目**不随仓库分发** Eigen 源码（3rdparty/ 已在 .gitignore 排除），
+构建时由 CMake 从本地目录选取或自动下载，属"使用库"而非"再分发"。
+详见：https://eigen.tuxfamily.org/dox/faq.html#faq_license
+
+本项目仅使用 Eigen 的纯头文件接口（Eigen/Core、Eigen/Dense），未修改其源码。
+
+
+--------------------------------------------------------------------------------
+3. ONNX Runtime（推理引擎，运行时链接，不随仓库分发）
+--------------------------------------------------------------------------------
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Licensed under the MIT License.
+Project: https://github.com/microsoft/onnxruntime
+
+本项目通过动态链接使用 ONNX Runtime（≥1.13），不修改、不静态包含其源码。
+
+
+--------------------------------------------------------------------------------
+4. OpenCV（图像处理，运行时链接，不随仓库分发）
+--------------------------------------------------------------------------------
+Copyright (C) 2000-2024 OpenCV Foundation / Intel Corporation
+
+Licensed under the Apache License 2.0 (since 4.5.0).
+Project: https://opencv.org
+
+本项目通过动态链接使用 OpenCV 4.x，不修改其源码。
+
+
+--------------------------------------------------------------------------------
+5. Qt 5（图形界面，运行时链接，不随仓库分发）
+--------------------------------------------------------------------------------
+Copyright (C) The Qt Company Ltd.
+
+Licensed under LGPL v3 / GPL v3 / 商业许可（本项目按 LGPL v3 动态链接使用）。
+Project: https://www.qt.io
+
+本项目 GUI 通过动态链接方式使用 Qt 5.12，未修改 Qt 源码，
+符合 LGPL v3 对动态链接的要求。
+
+
+================================================================================
+说明：若你分发本项目的**二进制包**，请自行随包附带上述各运行时库的许可文本
+（ONNX Runtime、OpenCV、Qt 均为动态库，其许可要求随二进制分发时附协议）。
+================================================================================

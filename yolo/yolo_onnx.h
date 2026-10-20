@@ -1,3 +1,7 @@
+// Derived from yolov8-opencv-onnxruntime-cpp
+//   https://github.com/UNeedCryDear/yolov8-opencv-onnxruntime-cpp
+// Copyright (c) UNeedCryDear and contributors - Apache License 2.0
+// Modifications Copyright (c) 2026 Zomcxj - modification list in LICENSE, section 0
 #pragma once
 // 定义 MSVC 特有的宏以兼容 MinGW 编译器
 #ifndef _Frees_ptr_opt_
