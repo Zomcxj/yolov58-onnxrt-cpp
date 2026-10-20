@@ -287,8 +287,8 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
     MYTrack tracker;                      // --track：跨帧保持轨迹
     std::vector<Object> tracks;
     if (opt.show) {                        // 预览窗口：默认 800x500，可拖拽缩放（不再原尺寸）
-        cv::namedWindow("yolov-onnxrt", cv::WINDOW_NORMAL);
-        cv::resizeWindow("yolov-onnxrt", 800, 500);
+        cv::namedWindow("yolov58-onnxrt-cpp", cv::WINDOW_NORMAL);
+        cv::resizeWindow("yolov58-onnxrt-cpp", 800, 500);
     }
     std::string exportDir;
     if (opt.exportFrames) {                // 逐帧图片+json：导干净帧（画框前）
@@ -358,7 +358,7 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
 
         if (saveVideo) writer.write(frame);
         if (opt.show) {
-            cv::imshow("yolov-onnxrt", frame);
+            cv::imshow("yolov58-onnxrt-cpp", frame);
             int key = cv::waitKey(1);
             if (key == 'q' || key == 27) break;
         }

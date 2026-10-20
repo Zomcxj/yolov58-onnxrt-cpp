@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
-set(PROJECT_NAME yolov-onnxrt)
+set(PROJECT_NAME yolov58-onnxrt-cpp)
 project(${PROJECT_NAME})
 
 set(CMAKE_CXX_STANDARD 14)

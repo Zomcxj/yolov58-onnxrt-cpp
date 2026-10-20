@@ -1,6 +1,6 @@
 #pragma once
 // Qt 图形界面（纯 Qt 进程，无 OpenCV 依赖）：
-//   界面收集参数 -> QProcess 启动同目录 yolov-onnxrt.exe（命令行与 main.cpp 完全一致）
+//   界面收集参数 -> QProcess 启动同目录 yolov58-onnxrt-cpp.exe（命令行与 main.cpp 完全一致）
 //   日志/进度来自子进程 stdout；图片模式逐张预览保存的结果图。
 // 本进程必须用 Qt 自带 mingw730_64 编译（与 Qt5.12 mingw73_64 运行时同 ABI），
 // 不可用项目主编译器（mingw81-sjlj，与 Qt seh 运行时混用会随机加载失败 0xC0000139）。
@@ -61,7 +61,7 @@ private slots:
 private:
     GuiParams collect();
     QStringList buildArgs(const GuiParams& p) const;
-    QString resolveCli() const;               // 定位 yolov-onnxrt.exe
+    QString resolveCli() const;               // 定位 yolov58-onnxrt-cpp.exe
     QString absSaveDir(const GuiParams& p) const;
     void previewInput();                      // 选中输入后立刻在左栏预览（不等推理）
     void setBusy(bool busy);

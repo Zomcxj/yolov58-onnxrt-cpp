@@ -35,7 +35,7 @@
 #endif
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("YOLO Infer GUI");
+    setWindowTitle("YOLOv58 ONNX Runtime");
     resize(1280, 860);
 
     auto* central = new QWidget(this);
@@ -267,8 +267,8 @@ MainWindow::~MainWindow() {
 QString MainWindow::resolveCli() const {
     QString appDir = QCoreApplication::applicationDirPath();
     // 部署形态：cli/ 子目录（CLI 自带 sjlj 运行时，与 GUI 的 Qt/seh 运行时隔离）
-    for (const QString& c : {appDir + "/cli/yolov-onnxrt.exe", appDir + "/yolov-onnxrt.exe",
-                             appDir + "/../yolov-onnxrt.exe"})
+    for (const QString& c : {appDir + "/cli/yolov58-onnxrt-cpp.exe", appDir + "/yolov58-onnxrt-cpp.exe",
+                             appDir + "/../yolov58-onnxrt-cpp.exe"})
         if (QFileInfo::exists(c)) return QFileInfo(c).absoluteFilePath();
     return QString();
 }
@@ -386,7 +386,7 @@ void MainWindow::onStart() {
     }
     QString cli = resolveCli();
     if (cli.isEmpty()) {
-        log("[error] 找不到 yolov-onnxrt.exe（请放到本程序同目录或其上级目录）"); return;
+        log("[error] 找不到 yolov58-onnxrt-cpp.exe（请放到本程序同目录或其上级目录）"); return;
     }
     GuiParams p = collect();
     m_videoMode = QFileInfo(p.input).isFile() &&
@@ -519,7 +519,7 @@ void MainWindow::onProcFinished(int code, QProcess::ExitStatus st) {
 
 void MainWindow::onProcError(QProcess::ProcessError err) {
     if (err == QProcess::FailedToStart)
-        log("[error] 子进程启动失败（缺 DLL？把 yolov-onnxrt 全套放同目录）");
+        log("[error] 子进程启动失败（缺 DLL？把 yolov58-onnxrt-cpp 全套放同目录）");
 }
 
 void MainWindow::onPickModel() {
