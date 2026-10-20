@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.14)
 
 set(PROJECT_NAME yolov58-onnxrt-cpp)
 project(${PROJECT_NAME})
@@ -20,9 +20,28 @@ else()
 endif()
 include_directories(${ONNXRUNTIME_DIR}/include)
 
+# ---- Eigen3（纯头文件，仅 bytetrack 需要 Core/Dense）----
+# 本地 3rdparty/eigen3 存在则直接用；否则 CMake 自动下载（不入库，仓库不带第三方头）
+if(EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/eigen3/Eigen/Core)
+    set(EIGEN3_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/eigen3)
+    message(STATUS "Eigen3: 使用本地 ${EIGEN3_INCLUDE_DIR}")
+else()
+    include(FetchContent)
+    FetchContent_Declare(eigen
+        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+        GIT_TAG        3.4.0
+        GIT_SHALLOW    TRUE)
+    set(EIGEN_BUILD_DOC    OFF CACHE BOOL "" FORCE)
+    set(BUILD_TESTING      OFF CACHE BOOL "" FORCE)
+    set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(eigen)
+    set(EIGEN3_INCLUDE_DIR ${eigen_SOURCE_DIR})
+    message(STATUS "Eigen3: 已自动下载到 ${EIGEN3_INCLUDE_DIR}")
+endif()
+include_directories(${EIGEN3_INCLUDE_DIR})
+
 include_directories(${CMAKE_SOURCE_DIR}/yolo)
 include_directories(${CMAKE_SOURCE_DIR}/bytetrack)
-include_directories(${CMAKE_SOURCE_DIR}/3rdparty/eigen3)
 
 aux_source_directory(yolo src1)
 aux_source_directory(bytetrack src2)

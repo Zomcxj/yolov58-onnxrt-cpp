@@ -19,3 +19,5 @@ diag/
 tools/build-gui/
 tools/build-qt/
 tools/*.zip
+build-verify/
+build-wsl/
