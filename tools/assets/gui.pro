@@ -1,6 +1,6 @@
 # YOLOv58InferGUI：yolov58-onnxrt-cpp 推理测试工具（QProcess 架构，纯 Qt 进程）
 #
-# 必须用 Qt 配套的 mingw730_64 工具链构建（见 build_gui.cmd）：
+# 必须用 Qt 配套的 mingw 工具链构建（见 tools/build_gui.sh）：
 # 项目主编译器是 mingw81-sjlj，与 Qt mingw73-seh 运行时混用会随机加载失败。
 
 QT       += widgets multimediawidgets
