@@ -411,6 +411,14 @@ static void printUsage(const char* prog) {
         "  " << prog << " model.onnx ./imgs det --track\n";
 }
 
+// 解析 "N" 或 "WxH"（大小写 x 均可）→ 两轴值；单值时两轴相同
+static void parseWxH(const std::string& v, int& w, int& h) {
+    std::string::size_type x = v.find('x');
+    if (x == std::string::npos) x = v.find('X');
+    if (x != std::string::npos) { w = std::stoi(v.substr(0, x)); h = std::stoi(v.substr(x + 1)); }
+    else                        { w = h = std::stoi(v); }
+}
+
 static bool parseArgs(int argc, char** argv, Options& opt) {
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
@@ -422,24 +430,12 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
         try {
             if      (a == "--crop")         opt.crop = true;
             else if (a == "--crop-size") {
-                // 支持 "1280"（正方形）或 "800x640"（宽x高）
-                std::string v = need("--crop-size");
-                size_t pos = v.find('x');
-                if (pos == std::string::npos) pos = v.find('X');
-                if (pos != std::string::npos)
-                    opt.cropSize = cv::Size(std::stoi(v.substr(0, pos)), std::stoi(v.substr(pos + 1)));
-                else
-                    opt.cropSize = cv::Size(std::stoi(v), std::stoi(v));
+                // "1280"（正方形）或 "800x640"（宽x高）
+                int w = 0, h = 0; parseWxH(need("--crop-size"), w, h);
+                opt.cropSize = cv::Size(w, h);
             }
             else if (a == "--crop-overlap") {   // N 或 WxH（列x行分轴重叠）
-                std::string v = need("--crop-overlap");
-                std::string::size_type x = v.find('x');
-                if (x != std::string::npos) {
-                    opt.cropOverlapW = std::stoi(v.substr(0, x));
-                    opt.cropOverlapH = std::stoi(v.substr(x + 1));
-                } else {
-                    opt.cropOverlapW = opt.cropOverlapH = std::stoi(v);
-                }
+                parseWxH(need("--crop-overlap"), opt.cropOverlapW, opt.cropOverlapH);
             }
             else if (a == "--threads")      opt.threads = std::stoi(need("--threads"));
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));

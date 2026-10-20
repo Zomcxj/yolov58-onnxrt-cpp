@@ -672,7 +672,7 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 	cv::Mat mask;                       // seg 专用掩膜；det/pose 不再整图白拷一份
 	if (this->task == "seg") mask = img.clone();
 
-	for (int i = 0; i < result.size(); i++) 
+	for (size_t i = 0; i < result.size(); i++) 
 	{
 		if (result[i].confidence > _classThreshold)
 		{   
