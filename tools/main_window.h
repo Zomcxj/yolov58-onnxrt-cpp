@@ -24,7 +24,6 @@ struct GuiParams {
     bool drawConf = false;        // 标签：置信度
     bool drawId = false;          // 标签：跟踪 id
     bool track = false;           // 目标跟踪
-    int  minTrackFrames = 0;      // 轨迹去抖（0=关）
     bool save = true;             // 保存结果
     QString saveDir = "output";   // 保存目录（子进程工作目录下，自动创建）
     bool preview = true;          // 图片模式：逐张预览结果图
@@ -80,7 +79,6 @@ private:
     // 推理参数
     class QDoubleSpinBox* m_conf = nullptr;
     QDoubleSpinBox* m_nms = nullptr;
-    class QSpinBox* m_minTrackFrames = nullptr;
     class QCheckBox* m_draw = nullptr;
     class QCheckBox* m_drawClass = nullptr;
     class QCheckBox* m_drawConf = nullptr;

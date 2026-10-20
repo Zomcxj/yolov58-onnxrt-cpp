@@ -49,7 +49,6 @@ yolov-onnxrt.exe model.onnx <图片/目录/视频> det [options]
 | `--crop-size` | 640 | 滑窗切块边长（默认正方形，支持 `800x640` 分轴） |
 | `--crop-overlap` | 160 | 切块重叠（默认两轴同值，支持 `60x240` 分轴；`-1` = 自动 20% 且 ≥200px） |
 | `--threads` | CPU 核数 | 切块并行推理线程数 |
-| `--min-track-frames` | 0（关） | 轨迹去抖：`--track` 时出现不足 N 帧不画不打 |
 
 库层用法（`slide_deal.h`）：`OnnxDetectSlideMT(yolo, img, result[, cropSize, overlapW, overlapH, conf, threads])`，
 参数顺序与全参版一致（conf 在第 7 位，`-1` = 沿用 `yolo._classThreshold`）；阈值也可直接改 `yolo._classThreshold` / `yolo._nmsThreshold` 成员。

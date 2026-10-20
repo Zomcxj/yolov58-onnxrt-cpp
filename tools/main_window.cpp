@@ -74,10 +74,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_drawId->setEnabled(false);                      // 依赖目标跟踪
     m_track     = new QCheckBox("目标跟踪", gbInf);
     connect(m_track, &QCheckBox::toggled, m_drawId, &QCheckBox::setEnabled);
-    m_minTrackFrames = new QSpinBox(gbInf); m_minTrackFrames->setRange(0, 100); m_minTrackFrames->setValue(0);
-    m_minTrackFrames->setToolTip("轨迹去抖：出现不足 N 帧不画不打，0=关");
-    m_minTrackFrames->setEnabled(false);              // 依赖目标跟踪
-    connect(m_track, &QCheckBox::toggled, m_minTrackFrames, &QSpinBox::setEnabled);
     m_crop = new QCheckBox("滑窗切块", gbInf);
     m_cropW = new QSpinBox(gbInf);  m_cropW->setRange(64, 4096);  m_cropW->setSingleStep(32); m_cropW->setValue(640);
     m_cropH = new QSpinBox(gbInf);  m_cropH->setRange(64, 4096);  m_cropH->setSingleStep(32); m_cropH->setValue(640);
@@ -118,8 +114,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     row0->addWidget(m_draw);      row0->addWidget(m_drawClass);
     row0->addWidget(m_drawConf);  row0->addWidget(m_drawId);
     row0->addWidget(m_track);
-    row0->addWidget(new QLabel("去抖N帧:", gbInf));
-    row0->addWidget(m_minTrackFrames);
     row0->addStretch(1);
     gInf->addLayout(row0, 0, 0, 1, 2);
 
@@ -150,7 +144,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     row2->addWidget(m_exportJson);
     gInf->addLayout(row2, 2, 0, 1, 2);
     // 输入框统一宽度（块/重叠/线程/抽帧/GPU编号）
-    for (QSpinBox* s : {m_cropW, m_cropH, m_ovW, m_ovH, m_threads, m_frameStep, m_cudaId, m_minTrackFrames})
+    for (QSpinBox* s : {m_cropW, m_cropH, m_ovW, m_ovH, m_threads, m_frameStep, m_cudaId})
         s->setFixedWidth(72);
     for (QDoubleSpinBox* s : {m_conf, m_nms})
         s->setFixedWidth(90);
@@ -324,8 +318,6 @@ QStringList MainWindow::buildArgs(const GuiParams& p) const {
     if (p.drawConf)   a << "--draw-conf";
     if (p.drawId)     a << "--draw-id";
     if (p.track)      a << "--track";
-    if (p.track && p.minTrackFrames > 0)
-        a << "--min-track-frames" << QString::number(p.minTrackFrames);
     if (!p.save)      a << "--no-save";
     if (p.save && !p.saveDir.trimmed().isEmpty())
         a << "--save-dir" << p.saveDir.trimmed();
@@ -359,7 +351,6 @@ GuiParams MainWindow::collect() {
     p.draw = m_draw->isChecked();         p.drawClass = m_drawClass->isChecked();
     p.drawConf = m_drawConf->isChecked(); p.drawId = m_drawId->isChecked();
     p.track = m_track->isChecked();
-    p.minTrackFrames = m_minTrackFrames->value();
     p.save = m_save->isChecked();
     p.saveDir = m_saveDir->text().trimmed();
     if (!p.saveDir.isEmpty() && QDir::isRelativePath(p.saveDir))   // 统一绝对路径（相对时按程序目录）

@@ -2,7 +2,6 @@
 #include "yolo_onnx.h"
 #include "MYTrack.h"
 #include <opencv2/core/utils/filesystem.hpp>
-#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <cstring>
@@ -28,7 +27,6 @@ struct Options {
     float  nms = 0.6f;       // NMS IoU 阈值（越小抑制越狠，保留框越少）
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
     bool   track = false;    // --track：检测后接 ByteTrack 跟踪（cls 无框，已在 main 里关闭）
-    int    minTrackFrames = 0; // --min-track-frames：轨迹去抖，出现不足 N 帧不画不打（0=关）
     std::string labels;      // --labels：类别名 txt；空 = <模型名>.txt
     std::string savePath = "output/";
     bool   save = true;      // --no-save 关闭保存
@@ -121,14 +119,6 @@ static void printDetDetails(const std::vector<YolovOutput>& result) {
     }
 }
 
-// 轨迹去抖：track_time 不足 minFrames 的剔除（画图/打印统一走过滤后的 tracks）
-static void filterMinTrackFrames(std::vector<Object>& tracks, int minFrames) {
-    if (minFrames <= 0 || tracks.empty()) return;
-    tracks.erase(std::remove_if(tracks.begin(), tracks.end(),
-                                [minFrames](const Object& t) { return t.track_time < minFrames; }),
-                 tracks.end());
-}
-
 static void printInfo(const Options& opt, const char* mode) {
     std::cout << "model: " << opt.modelPath
               << " | task: " << opt.task
@@ -183,7 +173,6 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
             tracker.resultStructTransfer(result, objs);
             tracks.clear();
             tracker.doTrack(objs, tracks);
-            filterMinTrackFrames(tracks, opt.minTrackFrames);
         }
 
         if (opt.exportFrames) {                // 图片模式 json：与原图同目录（原图不动，json 供 labelme 调整标注）
@@ -320,8 +309,7 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
                 tracker.resultStructTransfer(result, objs);
                 tracks.clear();
                 tracker.doTrack(objs, tracks);
-                filterMinTrackFrames(tracks, opt.minTrackFrames);
-            }
+                }
         }
 
         if (opt.exportFrames && process) {     // 导干净帧 + LabelMe json（在 DrawPred 之前，画的是原帧）
@@ -401,7 +389,6 @@ static void printUsage(const char* prog) {
         "  --conf F           置信度阈值（检测 NMS + 跨块合并 + 画框），默认 0.5\n"
         "  --nms F            NMS IoU 阈值，默认 0.6；越小抑制越狠，保留框越少\n"
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
-        "  --min-track-frames N  轨迹去抖：出现不足 N 帧不画不打，默认 0（关）；仅 --track 生效\n"
         "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
         "  --labels FILE     类别名 txt（每行一个；缺省 <模型名>.txt，再缺省 class_0..N）\n"
         "  --save-dir DIR     结果输出目录，默认 output/（项目目录下）\n"
@@ -458,7 +445,6 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));
             else if (a == "--nms")          opt.nms  = std::stof(need("--nms"));
             else if (a == "--track")        opt.track = true;
-            else if (a == "--min-track-frames") opt.minTrackFrames = std::stoi(need("--min-track-frames"));
             else if (a == "--labels")       opt.labels = need("--labels");
             else if (a == "--save-dir")     opt.savePath = need("--save-dir");
             else if (a == "--no-save")      opt.save = false;
