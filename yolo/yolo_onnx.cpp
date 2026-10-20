@@ -637,24 +637,42 @@ bool YolovOnnx::OnnxBatchDetect(std::vector<cv::Mat>& srcImgs, std::vector<std::
 }
 
 
+// ----------------------------------------------------------------------------
+// 画图公共渲染（DrawPred / DrawPredTrack 共用）：尺寸规则 / 色号公式 / 标签底色块
+// ----------------------------------------------------------------------------
+static void drawScaleThickness(const cv::Mat& img, double& scale, int& thickness) {
+	if (img.cols > 3000) { scale = 1.5; thickness = 2; }
+	else                 { scale = 0.5; thickness = 1; }
+}
+
+static cv::Scalar boxColor(int cls) {
+	int idx = cls + 3;
+	return cv::Scalar(37 * idx * idx % 255, 17 * idx * idx % 255, 29 * idx * idx % 255);
+}
+
+static void drawLabelBg(cv::Mat& img, int left, int top, const std::string& label,
+                        const cv::Scalar& color, double scale, int thickness) {
+	if (label.empty()) return;
+	int baseLine;
+	cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);
+	cv::rectangle(img, cv::Point(left, top - labelSize.height - 2), cv::Point(left + labelSize.width, top - 2), color, -1, cv::LINE_AA);
+	cv::putText(img, label, cv::Point(left, top - 2), cv::FONT_HERSHEY_COMPLEX, scale, cv::Scalar(225, 255, 255), thickness, cv::LINE_AA);
+}
+
 void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 
 	double scale;
 	int thickness;
+	drawScaleThickness(img, scale, thickness);
 
-	if (img.cols > 3000)
-		scale = 1.5, thickness = 2;
-	else
-		scale = 0.5, thickness = 1;
-
-	cv::Mat mask = img.clone();
+	cv::Mat mask;                       // seg 专用掩膜；det/pose 不再整图白拷一份
+	if (this->task == "seg") mask = img.clone();
 
 	for (int i = 0; i < result.size(); i++) 
 	{
 		if (result[i].confidence > _classThreshold)
 		{   
-		int idx = result[i].id + 3;
-		cv::Scalar color = cv::Scalar(37 * idx * idx % 255, 17 * idx * idx % 255, 29 * idx * idx % 255);
+		cv::Scalar color = boxColor(result[i].id);
 
 		int left, top;
 		if (result[i].box.area() > 0) {
@@ -679,14 +697,7 @@ void YolovOnnx::DrawPred(cv::Mat& img, std::vector<YolovOutput> result) {
 		if (drawConf)  { if (!label.empty()) label += " "; label += conf; }
 		if (drawId && result[i].track_id > 0) { if (!label.empty()) label += " "; label += "id:" + std::to_string(result[i].track_id); }
 
-		if (!label.empty()) {
-			int baseLine;
-			cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);
-			cv::rectangle(img, cv::Point(left, top - labelSize.height - 2), cv::Point(left + labelSize.width, top - 2), color, -1, cv::LINE_AA);
-			cv::putText(img, label, cv::Point(left, top - 2), cv::FONT_HERSHEY_COMPLEX, scale, cv::Scalar(225, 255, 255), thickness, cv::LINE_AA);
-		}
-
-		std::cout << _className[result[i].id] << " @ " << conf << std::endl;
+		drawLabelBg(img, left, top, label, color, scale, thickness);
 
 		if (this->task == "pose") {
 			if (result[i].keyPoints.size()!= poseparams.kptBodyNames.size())
@@ -789,26 +800,19 @@ void YolovOnnx::GetMask(const cv::Mat& maskProposals, const cv::Mat& maskProtos,
 void YolovOnnx::DrawPredTrack(cv::Mat& img, const std::vector<Object>& tracks) {
 	double scale;
 	int thickness;
-	if (img.cols > 3000) scale = 1.5, thickness = 2;
-	else                 scale = 0.5, thickness = 1;
+	drawScaleThickness(img, scale, thickness);
 
 	for (size_t i = 0; i < tracks.size(); ++i) {
 		const Object& t = tracks[i];
 		cv::Rect box((int)t.rect.x, (int)t.rect.y, (int)t.rect.width, (int)t.rect.height);
 		if (box.area() <= 0) continue;
-		int idx = t.label + 3;
-		cv::Scalar color = cv::Scalar(37 * idx * idx % 255, 17 * idx * idx % 255, 29 * idx * idx % 255);
+		cv::Scalar color = boxColor(t.label);
 		cv::rectangle(img, box, color, thickness, cv::LINE_AA);
 
 		std::string label;
 		if (drawClass) label += (t.label >= 0 && t.label < (int)_className.size()) ? _className[t.label] : ("class_" + std::to_string(t.label));
 		if (drawConf)  { std::string conf = cv::format("%.2f", t.prob); if (!label.empty()) label += " "; label += conf; }
 		if (drawId)    { if (!label.empty()) label += " "; label += "id:" + std::to_string(t.track_id); }
-		if (!label.empty()) {
-			int baseLine;
-			cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_COMPLEX, scale, thickness, &baseLine);
-			cv::rectangle(img, cv::Point(box.x, box.y - labelSize.height - 2), cv::Point(box.x + labelSize.width, box.y - 2), color, -1, cv::LINE_AA);
-			cv::putText(img, label, cv::Point(box.x, box.y - 2), cv::FONT_HERSHEY_COMPLEX, scale, cv::Scalar(225, 255, 255), thickness, cv::LINE_AA);
-		}
+		drawLabelBg(img, box.x, box.y, label, color, scale, thickness);
 	}
 }

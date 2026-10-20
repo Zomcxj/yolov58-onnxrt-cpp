@@ -2,6 +2,7 @@
 #include "yolo_onnx.h"
 #include "MYTrack.h"
 #include <opencv2/core/utils/filesystem.hpp>
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <cstring>
@@ -23,10 +24,11 @@ struct Options {
     cv::Size cropSize{640, 640}; // 切块尺寸（宽×高）
     int    cropOverlapW = 160; // 列(x)重叠像素；-1 = 自动
     int    cropOverlapH = 160; // 行(y)重叠像素；-1 = 自动；0 = 无重叠
-    float  conf = 0.5f;      // 置信度阈值（检测 NMS + 跨块合并 + 画框）
+    float  conf = 0.5f;      // 置信度阈值（喂 _classThreshold：检测 NMS/合并/画框 单一来源）
     float  nms = 0.6f;       // NMS IoU 阈值（越小抑制越狠，保留框越少）
     int    threads = 0;      // 裁剪并行线程数；0 = 自动
     bool   track = false;    // --track：检测后接 ByteTrack 跟踪（cls 无框，已在 main 里关闭）
+    int    minTrackFrames = 0; // --min-track-frames：轨迹去抖，出现不足 N 帧不画不打（0=关）
     std::string labels;      // --labels：类别名 txt；空 = <模型名>.txt
     std::string savePath = "output/";
     bool   save = true;      // --no-save 关闭保存
@@ -49,7 +51,7 @@ static void detectOne(YolovOnnx& yolo, cv::Mat& img, const Options& opt,
     if (opt.crop && (opt.task == "det" || opt.task == "obb")) {
         result = OnnxDetectSlideMT(yolo, img, opt.task, opt.cropSize,
                                        opt.cropOverlapW, opt.cropOverlapH,
-                                       opt.conf, opt.threads);
+                                       -1.f, opt.threads);   // -1 = 沿用 _classThreshold（阈值单一来源）
     } else {
         yolo.OnnxDetect(img, result);
     }
@@ -109,6 +111,24 @@ static void printTracks(const std::vector<Object>& tracks) {
     }
 }
 
+// 检测明细（非跟踪时逐目标一行：class/conf/box；替代原 DrawPred 内的逐框打印）
+static void printDetDetails(const std::vector<YolovOutput>& result) {
+    for (size_t i = 0; i < result.size(); ++i) {
+        std::cout << "    det class=" << result[i].id
+                  << " conf=" << result[i].confidence
+                  << " box=(" << result[i].box.x << "," << result[i].box.y << ","
+                  << result[i].box.width << "," << result[i].box.height << ")" << std::endl;
+    }
+}
+
+// 轨迹去抖：track_time 不足 minFrames 的剔除（画图/打印统一走过滤后的 tracks）
+static void filterMinTrackFrames(std::vector<Object>& tracks, int minFrames) {
+    if (minFrames <= 0 || tracks.empty()) return;
+    tracks.erase(std::remove_if(tracks.begin(), tracks.end(),
+                                [minFrames](const Object& t) { return t.track_time < minFrames; }),
+                 tracks.end());
+}
+
 static void printInfo(const Options& opt, const char* mode) {
     std::cout << "model: " << opt.modelPath
               << " | task: " << opt.task
@@ -163,6 +183,7 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
             tracker.resultStructTransfer(result, objs);
             tracks.clear();
             tracker.doTrack(objs, tracks);
+            filterMinTrackFrames(tracks, opt.minTrackFrames);
         }
 
         if (opt.exportFrames) {                // 图片模式 json：与原图同目录（原图不动，json 供 labelme 调整标注）
@@ -184,6 +205,7 @@ static int runImageMode(YolovOnnx& yolo, const Options& opt) {
         if (opt.track) std::cout << ", " << tracks.size() << " tracks";
         std::cout << "]  " << (int)(ms + 0.5) << " ms" << std::endl;
         if (opt.track) printTracks(tracks);
+        else printDetDetails(result);          // 非跟踪：逐目标明细（职责自 DrawPred 搬家至此）
     }
     std::cout << "done. " << files.size() << " image(s), " << nFail << " failed"
               << ", avg " << (files.size() ? (int)(totalMs / files.size() + 0.5) : 0) << " ms/img"
@@ -298,6 +320,7 @@ static int runVideoMode(YolovOnnx& yolo, const Options& opt) {
                 tracker.resultStructTransfer(result, objs);
                 tracks.clear();
                 tracker.doTrack(objs, tracks);
+                filterMinTrackFrames(tracks, opt.minTrackFrames);
             }
         }
 
@@ -378,6 +401,7 @@ static void printUsage(const char* prog) {
         "  --conf F           置信度阈值（检测 NMS + 跨块合并 + 画框），默认 0.5\n"
         "  --nms F            NMS IoU 阈值，默认 0.6；越小抑制越狠，保留框越少\n"
         "  --track            检测后接 ByteTrack 跟踪（打印 track id 并画框；cls 忽略）\n"
+        "  --min-track-frames N  轨迹去抖：出现不足 N 帧不画不打，默认 0（关）；仅 --track 生效\n"
         "  类别名              模型旁 <模型名>.txt，每行一个类别（可选，缺省 class_0..N）\n"
         "  --labels FILE     类别名 txt（每行一个；缺省 <模型名>.txt，再缺省 class_0..N）\n"
         "  --save-dir DIR     结果输出目录，默认 output/（项目目录下）\n"
@@ -434,6 +458,7 @@ static bool parseArgs(int argc, char** argv, Options& opt) {
             else if (a == "--conf")         opt.conf = std::stof(need("--conf"));
             else if (a == "--nms")          opt.nms  = std::stof(need("--nms"));
             else if (a == "--track")        opt.track = true;
+            else if (a == "--min-track-frames") opt.minTrackFrames = std::stoi(need("--min-track-frames"));
             else if (a == "--labels")       opt.labels = need("--labels");
             else if (a == "--save-dir")     opt.savePath = need("--save-dir");
             else if (a == "--no-save")      opt.save = false;

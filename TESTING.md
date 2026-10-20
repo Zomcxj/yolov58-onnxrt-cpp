@@ -54,6 +54,9 @@ $BIN <model.onnx> <img.jpg> det --conf 0.3 --nms 0.45 --track --draw-conf --draw
 # ========== 5. 跟踪 ==========
 $BIN <model.onnx> <video.mp4> det --track           # frame N [..., M tracks] + 每轨一行
 $BIN <model.onnx> <img_dir> det --track             # 图片序列跨图 id
+$BIN <model.onnx> <video.mp4> det --track --min-track-frames 2   # 去抖：frame1 新轨迹(time=1)被滤, frame2 起保留 → [1 objs, 0 tracks] then [.., 1 tracks]
+$BIN <model.onnx> <img.jpg> det                     # 非跟踪明细: det class=N conf=F box=(x,y,w,h) 一行一目标
+$BIN <model.onnx> <img.jpg> det --track             # 跟踪明细: track id=N class=N conf=F box=(..) track_time=N
 $BIN <model.onnx> <video.mp4> det --track --no-save # 只看打印不落盘
 
 # ========== 6. 保存 ==========
