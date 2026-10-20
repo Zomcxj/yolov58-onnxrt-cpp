@@ -67,6 +67,7 @@ private:
     void log(const QString& s);               // 日志统一入口：北京时间前缀（UTC+8，毫秒）
     QString stamp() const;
     void showImages();
+    void applyBaseStyle();                    // 界面样式（色板集中在此）
     void overlayTiles(QImage& im) const;      // 原图叠画滑窗切块网格（参数调整即时预览）                        // 双栏预览按窗口尺寸自适应缩放
     void resizeEvent(QResizeEvent* e) override;
     void playVideo(class QMediaPlayer*& pl, class QVideoWidget* vw,

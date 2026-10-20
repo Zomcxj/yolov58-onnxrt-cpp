@@ -205,23 +205,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     setCentralWidget(central);
 
-    // ---------- 圆角现代风样式 ----------
-    central->setStyleSheet(
-        "QGroupBox { border:1px solid #c8ccd4; border-radius:8px; margin-top:10px; background:#fafbfc; }"
-        "QGroupBox::title { subcontrol-origin: margin; left:12px; padding:0 4px; color:#33475b; }"
-        "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { border:1px solid #c8ccd4; border-radius:6px;"
-        "  padding:2px 6px; background:white; selection-background-color:#4a90d9; }"
-        "QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus { border-color:#4a90d9; }"
-        "QPushButton { border:1px solid #c8ccd4; border-radius:6px; padding:4px 14px; background:white; }"
-        "QPushButton:hover { background:#e8f0fe; border-color:#4a90d9; }"
-        "QPushButton:pressed { background:#d7e5fa; }"
-        "QPushButton:disabled { color:#9aa3ad; background:#f2f3f5; }"
-        "QPlainTextEdit { border:1px solid #c8ccd4; border-radius:6px; background:white; }"
-        "QProgressBar { border:1px solid #c8ccd4; border-radius:6px; background:#eef1f5; text-align:center; }"
-        "QProgressBar::chunk { border-radius:5px; background:#4a90d9; }"
-        "QCheckBox { spacing:4px; }"
-        "QSplitter::handle { background:#dfe3e8; width:3px; }"
-    );
+    applyBaseStyle();                      // 界面样式
 
     // ---------- 信号 ----------
     connect(bModel,  &QPushButton::clicked, this, &MainWindow::onPickModel);
@@ -248,6 +232,130 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_proc, &QProcess::readyReadStandardError,  this, &MainWindow::onProcStderr);
     connect(m_proc, SIGNAL(finished(int,QProcess::ExitStatus)), this, SLOT(onProcFinished(int,QProcess::ExitStatus)));
     connect(m_proc, SIGNAL(errorOccurred(QProcess::ProcessError)), this, SLOT(onProcError(QProcess::ProcessError)));
+}
+
+// ----------------------------------------------------------------------------
+void MainWindow::applyBaseStyle() {
+    // 色板
+    const QString WIN     = "#f3f3f3";   // 窗口底
+    const QString INPUT   = "#ffffff";   // 输入框底
+    const QString FG      = "#333333";   // 主文字
+    const QString FGDIM   = "#6a6a6a";   // 次要文字
+    const QString BD1     = "#d4d4d4";   // 卡片边
+    const QString BD2     = "#c8c8c8";   // 控件边
+    const QString ACCENT  = "#0e639c";   // 强调蓝
+    const QString SELBG   = "#cfe4f7";   // 选中底
+    const QString HOVER   = "#e8e8e8";   // 悬停
+    const QString PRESS   = "#dcdcdc";   // 按下
+    const QString DISFG   = "#a0a0a0";   // 禁用字
+    const QString DISBG   = "#f2f2f2";   // 禁用底
+    const QString BARBG   = "#e6e6e6";   // 进度槽
+    const QString THUMB   = "#c1c1c1";   // 滚动条滑块
+
+    QString css = QStringLiteral(
+        // 窗口与分组：标题用窗口底色遮断边框线（嵌在边框里）
+        "QMainWindow, QWidget { background:{{WIN}}; color:{{FG}}; }"
+        "QGroupBox { border:1px solid {{BD1}}; border-radius:8px;"
+        "  margin-top:9px; padding:10px 8px 6px 8px; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position:top left;"
+        "  left:14px; padding:0 5px; color:{{FG}}; background:{{WIN}}; }"
+
+        // 输入类：常态白底细边，聚焦仅边框变色
+        "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background:{{INPUT}}; color:{{FG}};"
+        "  border:1px solid {{BD2}}; border-radius:4px; padding:3px 6px; min-height:18px; }"
+        "QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover"
+        "  { border-color:{{BD1}}; }"
+        "QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus"
+        "  { border:1px solid {{ACCENT}}; }"
+        "QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled"
+        "  { color:{{DISFG}}; background:{{DISBG}}; border-color:{{BD2}}; }"
+        "QComboBox QAbstractItemView { background:{{INPUT}}; color:{{FG}};"
+        "  border:1px solid {{BD1}}; selection-background-color:{{SELBG}};"
+        "  selection-color:{{FG}}; outline:none; }"
+
+        // 按钮
+        "QPushButton { background:{{INPUT}}; color:{{FG}}; border:1px solid {{BD2}};"
+        "  border-radius:4px; padding:4px 14px; min-height:18px; }"
+        "QPushButton:hover { background:{{HOVER}}; border-color:{{ACCENT}}; }"
+        "QPushButton:pressed { background:{{PRESS}}; }"
+        "QPushButton:disabled { color:{{DISFG}}; background:{{DISBG}}; border-color:{{BD2}}; }"
+
+        // 复选框：未选中白底不发光，选中强调蓝
+        "QCheckBox { color:{{FG}}; spacing:6px; background:transparent; }"
+        "QCheckBox::indicator { width:13px; height:13px;"
+        "  border:1px solid {{BD2}}; border-radius:2px; background:{{INPUT}}; }"
+        "QCheckBox::indicator:hover { border-color:{{ACCENT}}; }"
+        "QCheckBox::indicator:checked { background:{{ACCENT}}; border-color:{{ACCENT}}; }"
+        "QCheckBox::indicator:disabled { background:{{DISBG}}; border-color:{{BD2}}; }"
+
+        "QLabel { color:{{FG}}; background:transparent; }"
+
+        // 日志区 / 进度条
+        "QPlainTextEdit { background:{{INPUT}}; color:{{FG}}; border:1px solid {{BD1}};"
+        "  border-radius:4px; padding:4px; selection-background-color:{{SELBG}};"
+        "  selection-color:{{FG}}; }"
+        "QProgressBar { background:{{BARBG}}; color:{{FG}}; border:1px solid {{BD1}};"
+        "  border-radius:4px; text-align:center; min-height:16px; }"
+        "QProgressBar::chunk { background:{{ACCENT}}; border-radius:3px; }"
+
+        // 分隔条
+        "QSplitter::handle { background:{{BD1}}; }"
+        "QSplitter::handle:hover { background:{{ACCENT}}; }"
+
+        // 滚动条
+        "QScrollBar:vertical { background:{{WIN}}; width:10px; margin:0; border:none; }"
+        "QScrollBar::handle:vertical { background:{{THUMB}}; border-radius:5px; min-height:24px; }"
+        "QScrollBar::handle:vertical:hover { background:{{ACCENT}}; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
+        "QScrollBar:horizontal { background:{{WIN}}; height:10px; margin:0; border:none; }"
+        "QScrollBar::handle:horizontal { background:{{THUMB}}; border-radius:5px; min-width:24px; }"
+        "QScrollBar::handle:horizontal:hover { background:{{ACCENT}}; }"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }"
+
+        // 菜单/状态栏/标签页（当前未用，预留避免系统默认色突兀）
+        "QMenuBar { background:{{WIN}}; color:{{FG}}; border-bottom:1px solid {{BD1}}; }"
+        "QMenuBar::item:selected { background:{{SELBG}}; }"
+        "QStatusBar { background:{{WIN}}; color:{{FGDIM}}; border-top:1px solid {{BD1}}; }"
+        "QMenu { background:{{INPUT}}; color:{{FG}}; border:1px solid {{BD1}}; padding:4px; }"
+        "QMenu::item:selected { background:{{SELBG}}; }"
+        "QTabBar::tab { background:transparent; color:{{FGDIM}}; padding:6px 14px;"
+        "  border-bottom:2px solid transparent; }"
+        "QTabBar::tab:selected { color:{{FG}}; border-bottom:2px solid {{ACCENT}}; }"
+    );
+
+    const QVector<QPair<QString, QString>> tokens = {
+        {"{{WIN}}", WIN}, {"{{INPUT}}", INPUT}, {"{{FG}}", FG}, {"{{FGDIM}}", FGDIM},
+        {"{{BD1}}", BD1}, {"{{BD2}}", BD2}, {"{{ACCENT}}", ACCENT}, {"{{SELBG}}", SELBG},
+        {"{{HOVER}}", HOVER}, {"{{PRESS}}", PRESS}, {"{{DISFG}}", DISFG},
+        {"{{DISBG}}", DISBG}, {"{{BARBG}}", BARBG}, {"{{THUMB}}", THUMB}
+    };
+    for (const auto& kv : tokens) css.replace(kv.first, kv.second);
+    setStyleSheet(css);
+
+    // ---- 预览两栏：恒深底（看图对比度优先） ----
+    for (QLabel* v : {m_viewOrig, m_viewRes}) {
+        if (v) v->setStyleSheet("QLabel#viewArea { background:#202020; color:#8a919c;"
+                                " border:1px solid " + BD1 + "; border-radius:4px; }");
+    }
+    // ---- 原图尺寸提示 ----
+    if (m_origInfo)
+        m_origInfo->setStyleSheet("color:#8a919c; background:transparent;");
+    // ---- 主按钮：蓝底白字 ----
+    if (m_start)
+        m_start->setStyleSheet(
+            "QPushButton { background:#0e639c; color:#ffffff; border:none; border-radius:4px;"
+            "  padding:5px 20px; font-weight:bold; }"
+            "QPushButton:hover { background:#1177bb; }"
+            "QPushButton:pressed { background:#094771; }"
+            "QPushButton:disabled { background:#a9c7e8; color:#eef3f8; }");
+    // ---- 停止按钮：红底白字（危险动作） ----
+    if (m_stop)
+        m_stop->setStyleSheet(
+            "QPushButton { background:#a04747; color:#ffffff; border:none; border-radius:4px;"
+            "  padding:5px 16px; }"
+            "QPushButton:hover { background:#b85450; }"
+            "QPushButton:pressed { background:#8a3c3c; }"
+            "QPushButton:disabled { background:#e3b8b2; color:#f4eceb; }");
 }
 
 MainWindow::~MainWindow() {
